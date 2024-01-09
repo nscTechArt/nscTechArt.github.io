@@ -6,7 +6,7 @@ url: https://nsctechart.github.io/
 owner:
   name: Shaocong Nie
   avatar: avatar.jpg
-  cv: https://nsctechart.github.io/file/Volume-Rendering-in-Unity3D.pdf
+  #cv: https://nsctechart.github.io/file/Volume-Rendering-in-Unity3D.pdf
   twitter: Noob_Coder22
   github: nscTechArt
   bilibili: 21109252
@@ -14,7 +14,6 @@ owner:
 
 
 # Links to include in top navigation
-# For external links add external: true
 links:
   - title: About Me
     url: /
@@ -30,6 +29,8 @@ links:
     # url: /notes/
   - title: Blogs
     url: /blogs/
+
+# 以下暂时不用修改------------------------------------------------------------------------------------
 
 # http://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 timezone: China/Beijing
@@ -65,5 +66,3 @@ disqus:
 
 include: [".htaccess"]
 exclude: ["lib", "config.rb", "Capfile", "config", "log", "Rakefile", "Rakefile.rb", "tmp", "less", "minimal-mistakes.sublime-project", "minimal-mistakes.sublime-workspace"]
-
-# Latest update in 2023/12/10 by Hanlin Cai.
