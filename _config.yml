@@ -19,16 +19,14 @@ links:
     url: /
   - title: Unity
     url: /Unity/
-  - title: Awards
-    url: /awards/
-  - title: Teams
-    url: /teams/
-  - title: Hobbies
-    url: /hobbies/
-  # - title: Notes
-    # url: /notes/
-  - title: Blogs
-    url: /blogs/
+  - title: Unreal
+    url: /Unreal/
+  - title: Blender
+    url: /Blender/
+  - title: CG
+    url: /CG/
+  - title: 随写
+    url: /随写/
 
 # 以下暂时不用修改------------------------------------------------------------------------------------
 
