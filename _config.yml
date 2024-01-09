@@ -1,5 +1,4 @@
-title: 返回主页
-#url: https://caihanlin.com
+title: 褴褛飞旋的博客
 url: https://nsctechart.github.io/
 
 # Owner/author information
@@ -25,8 +24,8 @@ links:
     url: /Blender/
   - title: CG
     url: /CG/
-  - title: 随写
-    url: /随写/
+  - title: Blogs
+    url: /blogs/
 
 # 以下暂时不用修改------------------------------------------------------------------------------------
 
