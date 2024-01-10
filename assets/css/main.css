@@ -309,7 +309,7 @@ html{background-color:#ffffff;font-family:'PT Serif',serif;font-color:#333332;fo
 .holder span{margin:0 5px;}
 
 
-.footer-wrap{position: absolute; bottom: 0; margin:0 auto;width:100%; *zoom: 1;;clear:both;margin-top:1em;padding-top:2em;padding-bottom:0; background-color:#000000;}.footer-wrap:before,.footer-wrap:after{display:table;content:"";}
+.footer-wrap{position: relative; bottom: 0; margin:0 auto;width:100%; *zoom: 1;;clear:both;margin-top:1em;padding-top:2em;padding-bottom:0; background-color:#000000;}.footer-wrap:before,.footer-wrap:after{display:table;content:"";}
 .footer-wrap:after{clear:both;}
 .footer-wrap:before,.footer-wrap:after{content:"";display:table;}
 .footer-wrap:after{clear:both;}
