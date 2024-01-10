@@ -8,4 +8,4 @@ title: Unity
 
 ### 2024
 
-[在URP中实现SSAO](https://nsctechart.github.io/blogs/Unity/SSAO-URP)
+[在URP中实现SSAO](https://lovewithyou.tech/blogs/Unity/SSAO-URP)

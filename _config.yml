@@ -1,11 +1,11 @@
 title: 褴褛飞旋的博客
-url: https://nsctechart.github.io
+url: https://lovewithyou.tech
 
 # Owner/author information
 owner:
   name: Shaocong Nie
   avatar: avatar.jpg
-  #cv: https://nsctechart.github.io/files/cv/MyCV.pdf
+  #cv: https://lovewithyou.tech/files/cv/MyCV.pdf
   twitter: Noob_Coder22
   github: nscTechArt
   bilibili: 21109252
@@ -26,8 +26,6 @@ links:
     url: /Graphics/
   - title: 随写
     url: /随写/
-  #- title: Blogs
-  #  url: /blogs/
 
 # 以下暂时不用修改------------------------------------------------------------------------------------
 
