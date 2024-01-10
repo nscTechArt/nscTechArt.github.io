@@ -15,7 +15,7 @@ owner:
 # Links to include in top navigation
 links:
   - title: About Me
-    url: /ABOUTME/
+    url: /
   - title: Unity
     url: /Unity/
   - title: Unreal
