@@ -1,7 +1,7 @@
 ---
 layout: page
 permalink: /blogs/Unity/SSAO-URP/index.html
-title: SSAO-URP
+title: 在URP下实现SSAO
 ---
 
 ## 在URP下实现SSAO
