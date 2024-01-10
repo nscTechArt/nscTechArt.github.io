@@ -5,7 +5,7 @@ url: https://nsctechart.github.io
 owner:
   name: Shaocong Nie
   avatar: avatar.jpg
-  #cv: https://nsctechart.github.io/file/cv/MyCV.pdf
+  #cv: https://nsctechart.github.io/files/cv/MyCV.pdf
   twitter: Noob_Coder22
   github: nscTechArt
   bilibili: 21109252
@@ -24,8 +24,10 @@ links:
     url: /Blender/
   - title: Graphics
     url: /Graphics/
-  - title: Blogs
-    url: /blogs/
+  - title: 随写
+    url: /随写/
+  #- title: Blogs
+  #  url: /blogs/
 
 # 以下暂时不用修改------------------------------------------------------------------------------------
 
