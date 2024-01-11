@@ -6,8 +6,7 @@ title: 在URP中手写Shader
 
 # 在URP中手写Shader
 
-> 本文翻译自cyan的博客 [Writing Shader Code in Universal RP (v2) | Cyanilux](https://www.cyanilux.com/tutorials/urp-shader-code/)
->
+> 本文翻译自cyan的博客 https://www.cyanilux.com/tutorials/urp-shader-code
 > 由于结合了自己的想法和认识，不一定对
 
 [TOC]
