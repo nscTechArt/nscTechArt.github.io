@@ -235,6 +235,43 @@ float4 colorB = SAMPLE_TEXTURE2D_LOD(textureName, sampler_textureName, uv, 0);
 
 常规的函数相关的就不赘述了，值得留意的是以下情况
 
-- `inline` 这是默认修饰符，也是函数实际可以使用的唯一修饰符，因此指定它并不重要。它表示编译器将为每次调用生成一个函数副本。这样做是为了减少调用函数的开销。
-- `#define` 宏会在编译着色器之前被处理，它们会被定义取代，并替换掉任何参数。例如 ：
+- `inline` 这是默认修饰符，也是函数实际可以使用的唯一修饰符，所以不管是否使用`inline`修饰符，函数都会是`inline`的。它表示编译器将为每次调用生成一个函数副本。这样做是为了减少调用函数的开销。
+- `#define` 宏会在编译着色器之前被处理，它们会被定义取代
 
+---
+
+### UnityPerMaterial CBUFFER
+
+为了让Shader可以与SRP Batcher兼容，我们应该在HLSLINCLUDE中指定**UnityPerMaterial CBUFFER**，这样就可以保证所有的Pass都使用相同的CBUFFER
+
+在CBUFFER中，必须包括所有在**Properties**中的属性（纹理除外，但是纹理所使用的tilling offset Texelsize需要在CBUFFER中出现。不能包含没有被暴露的属性。
+
+请注意：如果存在不公开的变量，请始终使用`Shader.SteGlobal`函数来进行赋值，从而确保他们在所有材质实例中保证相同。如果这个变量在不同的材质中需要使用不同的值，那么就需要将这个变量公开并写进CBUFFER
+
+---
+
+### Structs
+
+没啥可说的
+
+---
+
+### Vertex Shader
+
+顶点着色器的主要工作是把网格体的Object Space坐标转换到Clip Space坐标
+
+顶点着色器还会负责向片段着色器中传递数据，比如UV和顶点色，这些值会在三角形中被插值处理
+
+---
+
+### Fragment Shader
+
+片段着色器用来决定像素的输出（包括像素的alpha值）
+
+如果需要Alpha Clip的效果，也需要在片段着色器中处理
+
+---
+
+### Keywords & Shader Variants
+
+在Shader中，我们可以指定 #pragma multi_compile 和 #pragma shader_feature 指令，这些指令用于指定关键字，以 "打开 "或 "关闭 "着色器代码的某些部分。
