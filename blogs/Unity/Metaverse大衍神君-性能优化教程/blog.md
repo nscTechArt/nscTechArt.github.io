@@ -11,3 +11,5 @@ title: Unity性能优化案例
 - [**静态资源优化**](https://lovewithyou.tech/blogs/Unity/Metaverse大衍神君-性能优化教程/静态资源优化)
 
 - [**UGUI优化**](https://lovewithyou.tech/blogs/Unity/Metaverse大衍神君-性能优化教程/UGUI优化)
+
+- [**性能优化实践**](https://lovewithyou.tech/blogs/Unity/Metaverse大衍神君-性能优化教程/性能优化实践)
