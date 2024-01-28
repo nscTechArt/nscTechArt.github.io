@@ -1,6 +1,6 @@
 ---
 layout: page
-permalink: /Codes/index.html
+permalink: /blogs/Codes/index.html
 title: Codes
 ---
 
