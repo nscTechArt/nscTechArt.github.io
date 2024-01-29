@@ -1,6 +1,6 @@
 ---
 layout: page
-permalink: /blogs/Codes/C#中的out和ref/index.html
+permalink: /blogs/Codes/CSharp中的out和ref/index.html
 title: C#中out和ref的使用
 ---
 
