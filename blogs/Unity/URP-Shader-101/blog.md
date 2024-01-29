@@ -1,15 +1,14 @@
 ---
 layout: page
-permalink: /blogs/Unity/WritingShader-URP/index.html
-title: 在URP中手写Shader
+permalink: /blogs/Unity/URP-Shader-101/index.html
+title: URP-Shader要点
 ---
 
-# 在URP中手写Shader
+# URP-Shader要点
 
-> 本文翻译自cyan的博客 https://www.cyanilux.com/tutorials/urp-shader-code
-> 由于结合了自己的想法和认识，不一定对
+> 翻译自：https://www.cyanilux.com/tutorials/urp-shader-code
 
-[TOC]
+
 
 ## ShaderLab
 
@@ -28,19 +27,19 @@ Properties
 }
 ```
 
-我们也可以通过 C# 脚本更改这些属性（例如使用 material.SetColor / SetFloat / SetVector 等）。
+我们也可以通过 C# 脚本更改这些属性（例如使用 material.SetColor / SetFloat / SetVector 等）
 
-如果每种材质的属性都不同，我们必须在属性块和 UnityPerMaterial CBUFFER 中包含这些属性，以便正确支持 SRP Batcher（稍后将对此进行说明）。
+如果每种材质的属性都不同，我们必须在属性块和 UnityPerMaterial CBUFFER 中包含这些属性，以便正确支持 SRP Batcher（稍后将对此进行说明）
 
-如果所有着色器都应该共享相同的值，那么我们就不必在这里公开它们。相反，我们只需在稍后的 HLSL 代码中定义它们即可。我们仍然可以在 C# 中使用 Shader.SetGlobalColor / SetGlobalFloat / SetGlobalVector 等设置它们。
+如果所有着色器都应该共享相同的值，那么我们就不必在这里公开它们。相反，我们只需在稍后的 HLSL 代码中定义它们即可。我们仍然可以在 C# 中使用 Shader.SetGlobalColor / SetGlobalFloat / SetGlobalVector 等设置它们
 
 ------
 
 ### SubShader
 
-Shader可以包含多个SubShader。Unity 将使用 GPU 支持的第一个 SubShader 。
+Shader可以包含多个SubShader。Unity 将使用 GPU 支持的第一个 SubShader 
 
-同时我们也可以使用`RenderPipeline`的Tag来控制特定管线下对SubShader的使用。
+同时我们也可以使用`RenderPipeline`的Tag来控制特定管线下对SubShader的使用
 
 如果不存在支持的SubShader，我们还可以定义FallBack。没有定义FallBack的话，则会显示洋红色的ErrorShader
 
