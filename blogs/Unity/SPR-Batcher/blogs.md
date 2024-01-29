@@ -28,3 +28,6 @@ CBUFFER_START(UnityPerMaterial)
 CBUFFER_END
 ```
 
+
+
+SRP Batcher与ObjectPerMaterialPropertyBlock不兼容
