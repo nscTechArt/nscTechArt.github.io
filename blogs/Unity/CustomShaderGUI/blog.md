@@ -191,3 +191,25 @@ public override void OnGUI (
 
 <br>我们预设的按钮们就会出现在材质面板上![](files/材质面板.png)
 
+#### 折叠预设按钮
+
+如果使用预设按钮的频率不高，或者出于材质检查器的整洁美观，也可以选择收起这些按钮。具体的实现方式是使用`EditorGUILayout.Foldout`
+
+```c#
+private bool showPresets;
+
+public override void OnGUI(
+  MaterialEditor materialEditor, MaterialProperty[] properties)
+{
+		...
+    
+    EditorGUILayout.Space();
+    showPresets = EditorGUILayout.Foldout(showPresets, "Presets", true);
+    if (!showPresets) return;
+    OpaquePreset();
+    ClipPreset();
+    FadePreset();
+    TransparentPreset();
+}
+```
+
