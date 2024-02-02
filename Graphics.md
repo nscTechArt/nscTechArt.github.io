@@ -6,6 +6,5 @@ title: Graphics
 
 ## Graphics
 
-### 2024
-
-- [SSAO的实现](https://lovewithyou.tech/blogs/Graphics/SSAO的实现)
+- [**SSAO的实现(待完成)**](https://lovewithyou.tech/blogs/Graphics/SSAO的实现)
+- [**PBR中的感知粗糙度**](https://lovewithyou.tech/blogs/Graphics/PBR中的感知粗糙度)

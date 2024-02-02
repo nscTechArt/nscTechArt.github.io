@@ -28,14 +28,25 @@ brdf.roughness = PerceptualRoughnessToRoughness(perceptualRoughness);
 
 Unity使用了和迪士尼照明模型相同的思路，即
 
-```
+```glsl
 smoothness = 1.0 - roughness^2
 // or
 smoothness = 1.0 - perceptualRoughness
 ```
 
+但是需要注意的是在实际的微表面光照计算上，粗糙度还是以线性形式参与计算的
 
 
-从另一种思路来说，使用roughness^2可以提供更好的精度分布。比如在使用基于PBR的IBL时，一种常见的方法是**Split-Sum**，涉及到从roughness和NdotV计算Lookup Table，并在运行时将其和预卷积的环境贴图结合。这种情况下，使用线性粗糙度的精度会不够好，换成分辨率更好的LUT又会带来纹理采样的性能压力。
 
-这种思路也可以解释为什么对于纹理贴图我们要使用sRGB的格式，因为它更好地利用了数据中最明显的位(每通道8位)
+从另一种思路来说，使用roughness^2可以提供更好的精度分布。比如在使用基于PBR的IBL时，一种常见的方法是**Split-Sum**，涉及到从roughness和NdotV计算Lookup Table，并在运行时将其和预卷积的环境贴图结合。这种情况下，使用线性粗糙度的精度会不够好，换成分辨率更好的LUT又会带来纹理采样的性能压力。这种思路也可以解释为什么对于颜色贴图我们要使用sRGB的格式，因为它更好地利用了数据中最明显的位(每通道8位)。
+
+
+
+最后附上Unity中`PerceptualRoughnessToRoughness`的代码
+
+```glsl
+real PerceptualRoughnessToRoughness(real perceptualRoughness)
+{
+    return perceptualRoughness * perceptualRoughness;
+}
+```
