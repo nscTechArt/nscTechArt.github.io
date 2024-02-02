@@ -44,9 +44,10 @@ public class CustomShaderGUI : ShaderGUI
 - material editor
 - 被编辑的材质的索引，可以用MaterialEditor的targets中获取
 - Material Property 的数组
+
 <br>在Unity中，多个使用相同Shader的材质是可以同时选中并修改参数的，我们的Shader GUI也会支持这个功能
 
-```C#
+```c#
 private MaterialEditor editor;
 private Object[] materials;
 private MaterialProperty[] properties;
@@ -122,6 +123,7 @@ private bool ZWrite {
     set => SetProperty("_ZWrite", value ? 1f : 0f);
 }
 ```
+
 <br>RenderQueue同样需要设置
 
 ```c#
@@ -141,7 +143,7 @@ private RenderQueue RenderQueue
 
 接下来我们为预设选项创建按钮。按钮的创建可以使用`GUILayout.Button`，因为有多个预设的存在，我们将其封装成一个方法
 
-```C#
+```c#
 private bool PresetButton(string name)
 {
     if (GUILayout.Button(name))
@@ -154,7 +156,7 @@ private bool PresetButton(string name)
 ```
 <br>现在，我们就可以为每一个预设创建单独的方法，修改对应的设置，就以Opaque为例
 
-```C#
+```c#
 private void OpaquePreset()
 {
     if (!PresetButton("Opaque")) return;
