@@ -16,7 +16,11 @@ title: Unity
 <br>
 
 ##### 工具开发
+
+- [**Unity中的Shader GUI**](https://lovewithyou.tech/blogs/Unity/CustomShaderGUI)
+
 <br>
+
 ##### 美术资产管理
 
 <br>
