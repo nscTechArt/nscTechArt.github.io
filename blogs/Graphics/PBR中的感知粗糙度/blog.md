@@ -8,7 +8,7 @@ title: PBR中的感知粗糙度
 
 最近在学习Unity的过程中，发现Unity在计算BRDF的过程中，使用了感知粗糙度(PerceptualRoughness)这一概念，这篇博客记录我对这个概念的浅陋理解.
 
-
+  
 
 **首先是总结：** 
 
