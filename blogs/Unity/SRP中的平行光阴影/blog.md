@@ -26,6 +26,8 @@ Unity基于ShadowMap实现了阴影的渲染，主要原理可以概括为：生
 <br> 同时，因为Unity中不止平行光这一种形式的灯光，各个类型灯光的阴影的设置和实现方法存在区别，所以我们把平行光相关的设置单独放进一个结构体中。
 
 ```c#
+// ShadowSettings Class
+
 using UnityEngine
 
 [System.Serializable]
@@ -54,6 +56,8 @@ public class ShadowSettings
 <br>接下来，为我们的SRP管线实例化阴影的设置。
 
 ```c#
+// CustomRenderPipelineAsset Class
+
 [SerializeField] private ShadowSettings shadows;
 ```
 
@@ -68,6 +72,8 @@ public class ShadowSettings
 <br>SRP中，场景中的相机逐次渲染。每个相机渲染阴影时，不能只考虑全局范围内的阴影设置，还需要把相机的剔除和灯光的设置纳入考虑范围。比如说渲染阴影的距离应该从Max Distance和相机的远裁截面中选择较小的那个，每个灯光的阴影也有强弱、软硬之分。我们在`CameraRender.Render`中修改相应的代码，并把shadow settings也作为参数传入灯光的设置中。
 
 ```c#
+// CameraRenderer Class
+
 public void Render (
     ScriptableRenderContext context, Camera camera,
     bool useDynamicBatching, bool useGPUInstancing,
@@ -95,6 +101,8 @@ private bool Cull (float maxShadowDistance) {
 <br>
 
 ```c#
+// Lighting Class
+
 public void Setup (
     ScriptableRenderContext context, CullingResults cullingResults,
     ShadowSettings shadowSettings
@@ -105,3 +113,119 @@ public void Setup (
 
 虽然阴影的渲染可以视为灯光的一部分，但是因为阴影渲染本身也是一个复杂的过程，我们把相关的逻辑单独放在`shadows`类中。这个类和我们所定义的`Lighting`类有相似之处，除了ShadowSettings之外，我们需要context、cullingResults以及command buffer。
 
+```c#
+// Shadows Class
+
+using UnityEngine;
+using UnityEngine.Rendering;
+
+public class Shadows
+{
+    private const string bufferName = "Shadows";
+    private CommandBuffer buffer = new CommandBuffer {name = bufferName};
+    
+    private ScriptableRenderContext context;
+    private CullingResults cullingResults;
+    private ShadowSettings settings;
+    
+    public void Setup (
+        ScriptableRenderContext context, 
+    	CullingResults cullingResults，
+    	ShadowSettings settings)
+    {
+        this.context = context;
+        this.cullingResults = cullingResults;
+        this.settings = settings;
+    }
+    
+    private void ExecuteBuffer()
+    {
+        context.ExecuteCommandBuffer(buffer);
+        buffer.Clear();
+    }
+}
+```
+
+<br>当然，这只是阴影渲染的开始，之后所有的逻辑都会在`Shadows`这个类中实现，`Lighting`类所需要的只是将阴影的绘制添加进它的渲染流程。
+
+```c#
+// Lighting Class
+
+private Shadows shadows = new Shadows();
+
+public void Setup(...)
+{
+    this.cullingResults = cullingResults;
+    buffer.BeginSample(bufferName);
+    shadows.Setup(context, cullingResults, shadowSettings);
+    SetupLights();
+}
+```
+
+##### Lights with Shadows
+
+尽管我们的最终目标是实现多个平行光的阴影，不过让我们先从一个开始，也就是：假定场景中有且只有一个shadow-cast的灯光。但是这也会带来一个问题，到底是哪个灯光投影呢？不过我们定义一个结构体，并且用一个数组来管理这些结构体。目前，这个结构体只包含灯光在可见光数组中的索引。
+
+```c#
+// Shadows Class
+
+private const int maxShadowedDirectionalLightCount = 1;
+
+private struct ShadowedDirectionalLight
+{
+    public int visibleLightIndex;
+}
+private ShadowedDirectionalLight[] shadowedDirectionalLights = 
+    new ShadowedDirectionalLight[maxShadowedDirectionalLightCount];
+```
+
+<br>现在，我们需要确定哪个灯光是需要投影的。为此，我们定义一个方法`ReserveDirectionalShadows()`，如果判断得到某个灯是投影的，我们把它加入我们的`ShadowedDirectionalLight[]`，并把它的索引一并存储。~~我们还会通过在阴影图集(shadow atlas)中为shadow map预留空间，并且存储渲染阴影所需要的信息。~~
+
+<br>
+
+我们必须明确的是，如果判断一个灯光是需要投影的。目前，我们要考虑以下因素并在代码中实现
+
+- 当前投影的灯光数量小于最大投影灯光数量
+- 灯光的投影模式不能为none
+- 灯光的阴影强度大于0
+- 灯光如果只影响在Max Shadow Distance之外的物体，那这个灯光就没有阴影需要渲染。这需要我们在cullingResults中调用`GetShadowCasterBounds`来检测，它需要我们提供当前的可见光的索引
+
+```c#
+// Shadows Class
+
+private int shadowedDirectionalLightCount;
+
+public void Setup(...)
+{
+    ...
+    shadowedDirectionalLightCount = 0; // 归零计数
+}
+
+public void ReserveDirectionalShadows(
+    Light light, int visibleLightIndex)
+{
+    if (shadowedDirectionalLightCount < maxShadowedDirectionalLightCount && 
+       light.shadows != LightShadows.None &&
+       light.shadowStrength > 0f &&
+       cullingResults.GetShadowCasterBounds(visibleLightIndex, out Bounds bounds))
+    {
+        shadowedDirectionalLights[shadowedDirectionalLightCount++] = 
+            new ShadowedDirectionalLight {visibleLightIndex = visibleLightIndex};
+    }
+}
+```
+
+<br>如此一来，我们就可以在`Lighting`遍历灯光时插入这个方法了
+
+```c#
+// Lighting Class
+
+private void SetupDirectionalLight (int index, ref VisibleLight visibleLight)
+{
+    dirLightColors[index] = visibleLight.finalColor;
+    dirLightDirections[index] = -visibleLight.localToWorldMatrix.GetColumn(2);
+    shadows.ReserveDirectionalShadows(visibleLight.light, index);
+}
+```
+
+##### Creating the Shadow Atlas
