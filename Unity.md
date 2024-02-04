@@ -9,7 +9,7 @@ title: Unity
 - [**URP-Shader要点**](https://lovewithyou.tech/blogs/Unity/URP-Shader-101)
 - [**SRP Batcher**](https://lovewithyou.tech/blogs/Unity/SRP-Batcher)
 - [**Unity中的AA**](https://lovewithyou.tech/blogs/Unity/Unity中的AA)
-- [**SRP中的平行光阴影**](https://lovewityou.tech/blogs/Unity/SRP中的平行光阴影)
+- [**SRP中的平行光阴影**](https://lovewithyou.tech/blogs/Unity/SRP中的平行光阴影)
 
 <br>
 
