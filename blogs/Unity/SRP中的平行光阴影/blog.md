@@ -61,13 +61,9 @@ public class ShadowSettings
 [SerializeField] private ShadowSettings shadows;
 ```
 
-<br>
+<br>完成之后，我们就可以像URP那样在Inspector面板中修改阴影的相关参数了，虽然目前比URP简陋了很多。![](files/shadowSettings.png)
 
-完成之后，我们就可以像URP那样在Inspector面板中修改阴影的相关参数了，虽然目前比URP简陋了很多。![](files/shadowSettings.png)
-
-<br>
-
-不过目前我们的阴影设置还没有参与进管线，我们需要把shadow settings作为Custom RP Asset创建的参数之一，并进一步被传递给渲染每个相机时所调用的方法。本篇博客就暂且不展示这部分的代码了。
+<br>不过目前我们的阴影设置还没有参与进管线，我们需要把shadow settings作为Custom RP Asset创建的参数之一，并进一步被传递给渲染每个相机时所调用的方法。本篇博客就暂且不展示这部分的代码了。
 
 <br>SRP中，场景中的相机逐次渲染。每个相机渲染阴影时，不能只考虑全局范围内的阴影设置，还需要把相机的剔除和灯光的设置纳入考虑范围。比如说渲染阴影的距离应该从Max Distance和相机的远裁截面中选择较小的那个，每个灯光的阴影也有强弱、软硬之分。我们在`CameraRender.Render`中修改相应的代码，并把shadow settings也作为参数传入灯光的设置中。
 
@@ -98,8 +94,6 @@ private bool Cull (float maxShadowDistance) {
     return false;
 }
 ```
-<br>
-
 ```c#
 // Lighting Class
 
@@ -181,9 +175,7 @@ private ShadowedDirectionalLight[] shadowedDirectionalLights =
 
 <br>现在，我们需要确定哪个灯光是需要投影的。为此，我们定义一个方法`ReserveDirectionalShadows()`，如果判断得到某个灯是投影的，我们把它加入我们的`ShadowedDirectionalLight[]`，并把它的索引一并存储。~~我们还会通过在阴影图集(shadow atlas)中为shadow map预留空间，并且存储渲染阴影所需要的信息。~~
 
-<br>
-
-我们必须明确的是，如果判断一个灯光是需要投影的。目前，我们要考虑以下因素并在代码中实现
+<br>我们必须明确的是，如果判断一个灯光是需要投影的。目前，我们要考虑以下因素并在代码中实现
 
 - 当前投影的灯光数量小于最大投影灯光数量
 - 灯光的投影模式不能为none
