@@ -415,3 +415,164 @@ private void SetTileViewport(int index, int split)
 ```
 
 #### 2 Sampling Shadows
+
+阴影的渲染还需要我们在`CustomLit`Pass中采样shadow map，从而判断一个片段是否处于阴影之中。
+
+##### Shadow Matrices
+
+对于每个片段，我们需要在atlas中选取恰当的tile来采样深度信息，所以需要从世界空间中获取对应的shadow map的纹理坐标。我们的实现方式是通过为每个投影的平行光创建一个shadow transformation矩阵，并传进GPU。
+
+```c#
+// Shadows Class
+private static int dirShadowMatricesID = Shader.PropertyToID("_DirectionalShadowMatrices");
+private static Matrix4x4[] dirShadowMatrices = new Matrix4x4[maxShadowedDirectionalLightCount];
+
+private void RenderDirectionalShadows()
+{
+    ...
+    buffer.SetGlobalMatrixArray(dirShadowMatricesID, dirShadowMatrices);
+    buffer.EndSample(bufferName);
+    ExecuteBuffer();
+}
+
+private void RenderDirectionalShadows(int index, int split, int tileSize)
+{
+    ...
+    SetTileViewport(index, split, tileSize);
+    dirShadowMatrices[index] = projectionMatrix * viewMatrix;
+    buffer.SetViewProjectionMatrices(viewMattix, projectionMatrix);
+}
+```
+
+<br>实际上我们还需要考虑到级联阴影的存在，也就是说，我们需要从世界空间转换到tile space，我们创建一个新的方法来实现这个功能，具体实现的细节在代码注释中说明。之前我们在`SetTileViewport`中计算了tile的偏移，现在让我们把偏移值返回出来。
+
+```c#
+// Shadows Class
+
+private void RenderDirectionalShadows(int index, int split, int tileSize)
+{
+    ...
+    dirShadowMatrices[index] = ConvertToAtlasMatrix(projectionMatrix * viewMatrix, SetTileViewport(index, split, tileSize), split);
+    buffer.SetViewProjectionMatrices(viewMattix, projectionMatrix);
+}
+
+Matrix4x4 ConvertToAtlasMatrix(Matrix4x4 m, Vector2 offset, int split)
+{
+    // Check if revserse Z-Buffer is neceserray
+    if (SystemInfo.usesReversedZBuffer) 
+    {
+        m.m20 = -m.m20;
+        m.m21 = -m.m21;
+        m.m22 = -m.m22;
+        m.m23 = -m.m23;
+    }
+    // Clip Space的范围是[-1, 1]的立方体，但是纹理坐标的范围是[0, 1]
+    // Also tile offset and scale
+    float scale = 1f / split;
+    m.m00 = (0.5f * (m.m00 + m.m30) + offset.x * m.m30) * scale;
+    m.m01 = (0.5f * (m.m01 + m.m31) + offset.x * m.m31) * scale;
+    m.m02 = (0.5f * (m.m02 + m.m32) + offset.x * m.m32) * scale;
+    m.m03 = (0.5f * (m.m03 + m.m33) + offset.x * m.m33) * scale;
+    m.m10 = (0.5f * (m.m10 + m.m30) + offset.y * m.m30) * scale;
+    m.m11 = (0.5f * (m.m11 + m.m31) + offset.y * m.m31) * scale;
+    m.m12 = (0.5f * (m.m12 + m.m32) + offset.y * m.m32) * scale;
+    m.m13 = (0.5f * (m.m13 + m.m33) + offset.y * m.m33) * scale;
+    
+    return m;
+}
+
+Vector2 SetTileViewport(int index, int split, int tileSize)
+{
+    ...
+    return offset;
+}
+```
+
+##### Storing Shadow Data Per Light
+
+采样灯光的阴影需要确定对应的是哪个tile，二者的关系是一一对应的，我们可以在`ReserveDirectionalShadows`中明确这个关系，同时一并返回shadow strength。
+
+```c#
+// Shadows Class
+public Vector2 ReserveDirectionalShadows(...)
+{
+    if (...)
+    {
+        shadowedDirectionalLights[shadowedDirectionalLightCount] = new ShadowedDirectionalLight {visibleLightIndex = visibleLightIndex};
+        return new Vector(light.shadowStrength, shadowedDirectionalLightCount++);
+    }
+    return Vector2.zero;
+}
+```
+
+<br>现在我们获取了每个投影的平行光的shadowStrength和对应的tile索引，和灯光的颜色、方向一样，这两个也属于灯光的信息，所以我们在`Lighting`中一起传给Shader。Shader中也要在CBuffer中添加对应的全局变量，这里就先省略了。
+
+```c#
+// Lighting Class
+private static int dirLightShadowDataID = Shader.PropertyToID("_DirectionalLightShadowData");
+private staic Vector4[] dirLightShadowData = new Vector[maxDirLightCount];
+
+private void SetupLights()
+{
+    ...
+    buffer.SetGlobalVectorArray(dirLightShadowDataID, dirLightShadowData);
+}
+
+private void SetupDirectionalLight (int index, ref VisibleLight visibleLight)
+{
+    dirLightColors[index] = visibleLight.finalColor;
+    dirLightDirections[index] = -visibleLight.localToWorldMatrix.GetColumn(2);
+    dirLightShadowData[index] = shadows.ReserveDirectionalShadows(visibleLight.light, index);
+}
+```
+
+##### Shadows HLSL File
+
+因为在Shader中采样阴影也是庞杂的一部份，我们将相关代码独立出来，放在`Shadows.hlsl`中，并在`LitPass`中把这个hlsl文件包含在`Light.hlsl`之前。在这个文件里，我们定义最大投影平行光数量、阴影图集以及空间转换所使用的矩阵数组。<br>由于阴影图集并非常规的纹理，Unity提供了特别的宏、采样器已经采样方式。需要注意的是，`TEXTURE2D_SHADOW`和`TEXTURE2D`并没有什么区别，只是强调了采样的是ShadowMap而不是常规的贴图。
+
+```glsl
+// Shadows.hlsl
+#ifndef CUSTOM_SHADOWS_INCLUDED
+#define CUSTOM_SHADOWS_INCLUDED
+
+#define MAX_SHADOWED_DIRECTIONAL_LIGHT_COUNT 4
+
+TEXTURE2D_SHADOW(_DirectionalShadowAtlas);
+#define SHADOW_SAMPLER sampler_linear_clamp_compare
+SAMPLER_CMP(SHADOW_SAMPLER);
+
+CBUFFER_START(_CustomShadows)
+    float4x4 _DirectionalShadowMatrices[MAX_SHADOWED_DIRECTIONAL_LIGHT_COUNT];
+CBUFFER_END
+
+#endif
+```
+
+##### Sampling Shadows
+
+前面提到过，采样贴图涉及到片段从世界空间到灯光空间中的转换，在`Surface.hlsl`中添加position，并在片段着色器中赋值，代码就不展示了。<br>采样shadows还需要知道每个平行光所对应的阴影信息，在管线中我们已经传进Shader里了，现在让我们在`Shadows.hlsl`中定义出来。<br>在Shader中过采样阴影图集得到的结果，可以视为一个范围[0,1]的参数，用来衡量光线到达物体表面的距离，如果一个片段被完全遮挡，这个参数就是0，没有遮挡便为1，中间值表示该片段被部分遮挡。<br>不同灯光可能有不同的阴影强度，我们应该在根据这个强度对采样的结果进行插值。如果阴影强度小于等于0，我们甚至都没有必要再为这个灯光进行采样，直接定义这个灯光带给片段的阴影衰减为1。基于以上的思考，我们将这两个方法定义出来。
+
+```glsl
+// Shadows.hlsl
+struct DirectionalShadowData
+{
+    float strength;
+    int tileIndex;
+};
+    
+float SampleDirectionalShadowAtlas(float3 positionSTS)
+{
+    // positionSTS 代表 position in Shadow Texture Space
+    return SAMPLE_TEXTURE2D_SHADOW(_DirectionalShadowAtlas, SHADOW_SAMPLER, positionSTS);
+}
+
+float GetDirectionalShadowAttenuation(DirectionalShadowData data, Surface surfaceWS)
+{
+    if (data.strength <= 0.0)
+        return 1.0;
+    
+    float3 positionSTS = mul(_DirectionalShadowMatrices[data.tileIndex], float4(surfaceWS.position, 1.0)).xyz;
+    float shadow = SampleDirectionalShadowAtlas(positionSTS);
+    return lerp(1.0, shadow, data.strength);
+}
+```
