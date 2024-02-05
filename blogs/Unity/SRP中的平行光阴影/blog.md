@@ -285,3 +285,133 @@ public void Render(...)
 }
 ```
 
+<br>在创建完shadow map RT后，我们必须命令GPU绘制到Render Target上，而不是camera target上，这一步我们可以通过`buffer.SetRenderTarget()`来实现。考虑到这个RT是实时clear的，并且需要RT来存储shadow data。<br>作为阴影渲染的Render Target，我们需要考虑到depth buffer的clear，颜色缓存在此时不重要
+
+```c#
+// Shadows Class
+private void RenderDirectionalShadows() 
+{
+    buffer.GetTemporaryRT(...);
+    buffer.SetRenderTarget(
+        dirShadowAtlasID, 
+        RenderBufferLoadAction.DontCare,
+    	RenderBufferStoreAction.Store);
+    buffer.ClearRenderTarget(true, false, Color.clear);
+    ExecuteBuffer();
+}
+```
+
+<br>此时，如果场景中有投影的平行光，就可以在frame debugger中看到阴影绘制的指令了![](files/clearing-two-render-targets.png)
+
+##### Shadows First
+
+虽然可以看到Shadows的buffer已经生效了，但是为了不影响相机正常的渲染流程和结果，我们应该把阴影的绘制与相机的渲染分离开来。也就是先调用`Lighting`类的`Setup()`，再调用相机的Setup()。同时为了保持frame debugger里嵌套的合理性，我们用buffer.BeginSample()和buffer.EndSample()包围`Lighting`中`Setup()`的调用
+
+```c#
+// CameraRenderer Class
+buffer.BeginSample(sampleName);
+ExecuteBuffer();
+lighting.Setup(context, cullingResults, shadowSettings);
+buffer.EndSample(sampleName);
+Setup();
+DrawVisibleGeometry(useDynamicBatching, useGPUInstancing);
+```
+
+##### Rendering Single Light
+
+和`Lighting`类相似，我们创建一个`RenderDirectionalShadows()`的重载，把单个灯光阴影的逻辑放在这个重载方法内，同时提供两个参数，一个是当前灯光在`ShadowedDirectionalLight[]`中的索引，另一个是当前灯光的shadow map tile的分辨率。不过，我们暂时先只考虑灯光，让tile的分辨率和atlas的分辨率相等。
+
+```c#
+// Shadows Class
+private void RenderDirectionalShadows()
+{
+    ...
+    buffer.ClearRenderTarget(true, false, Color.clear);
+    
+    buffer.BeginSample(bufferName);
+    ExecuteBuffer();
+    
+    for (int i = 0; i < shadowedDirectionalLightCount; i++)
+    {
+        RenderDirectionalShadows(i, atlasSize);
+    }
+    
+    buffer.EndSample(bufferName);
+    ExecbuteBuffer();
+}
+
+private void RenderDirectionalShadows(int index, int tileSize) {}
+```
+
+<br>Unity SRP中绘制阴影是通过`context.DrawShadows()`实现的，它会将单个灯光的阴影绘制纳入管线之中，参数是一个`ShadowDrawingSettings`的结构体。让我们逐步配置好`ShadowDrawingSettings`，它包含以下属性
+
+- cullingResult
+- lightIndex
+- projectionType
+- splitData：包含了给定的级联阴影的剔除信息， 决定如何渲染一个split的阴影
+
+<br>前三者可以直接通过`ShadowDrawingSettings`的构造函数设置，splitData则需要使用culllingResults中的`ComputeDirectionalShadowMatricesAndCullingPrimitives()`来获取。这个方法不仅能计算出splitData，还可以为我们提供两个别的重要数据：
+
+- 与平行光方向所匹配的view project矩阵
+- 一个clip space的立方体，这个立方体与包含可见光阴影的摄像机的可见区域重叠
+
+<br>Unity为什么要专门封装出一个这样的方法呢？这还要回到shadow map的原理上来：从光线的角度渲染场景，只存储深度信息，得到的结果代表着光线在照到物体之前经过了多远的距离。但是在Unity中，平行光的距离被设置为无限远，并不存在一个真实有效的位置，这就可以解释`ComputeDirectionalShadowMatricesAndCullingPrimitives()`的意义了。注意，这个方法也是级联阴影相关的，我们暂时都按不采用级联处理。<br>在提交绘制阴影的指令之前，我们还需要把绘制转换到平行光的视角。这样，单个平行光的阴影绘制就算完成了。
+
+```c#
+// Shadows Class
+private void RenderDirectionalShadows(int index, int tileSize)
+{
+    ShadowedDirectionalLight light = shadowedDirectionalLights[index];
+    ShadowDrawingSettings shadowSettings = 
+        new ShadowDrawingSettings(cullingResults, light.VisibleLightInidex,
+                                 BatchCullingProjectionType.Orthographic);
+    cullingResults.ComputeDirectionalShadowMatricesAndCullingPrimitives(
+    light.VisibleLightIndex, 0, 1, Vector3.zero, tileSize, 0f, 
+    out Matrix4x4 viewMatrix, out Matrix4x4 projectionMatrix,
+    out ShadowSplitData splitData);
+    shadowSettings.splitData = splitData;
+    buffer.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
+    ExecuteBuffer();
+    context.DrawShadows(ref shadowSettings);
+}
+```
+
+##### Shadow Caster Pass
+
+虽然目前来看，管线上的工作已经准备好了，但是我们的阴影图集并没有被绘制上任何内容。这是因为`context.DrawShadows()`只会渲染材质中包含`ShadowCasterpass`的物体。`ShadowCasterpass`与`LitPass`类似，它的顶点着色器和片段着色器中传递的数据更少，同时因为我们只需要写入深度指，我们可以添加`ColorMask 0`而不向`SV_Target`输出任何内容。
+
+##### Mutiple Lights
+
+终于，我们可以着手实现多个平行光的阴影了。让我们调整最大可投影平行光的数量。<br>按照我们之前的代码，场景中现在多个平行光阴影的shadow map会叠加在一张图上。我们需要的效果是将一个atlas分割为多个tile，平行光的shadowmap绘制在对应的tile中。这也是需要调整的一部份。
+
+```c#
+// Shadows Class
+private const int maxShadowedDirectionalLightCount = 4;
+
+private void RenderDirectionalShadows()
+{
+    ...
+    int split = shadowedDirectionalLightCount <= 1 ? 1 : 2;
+    int tileSize = atlasSize / split;
+    
+    for (int i = 0; i < shadowedDirectionalLightCount; i++)
+    {
+        RenderDirectionalShadows(i, split, tileSize);
+    }
+}
+
+private void RenderDirectionalShadows(int index, int split, int tileSize)
+{
+    ...
+    SetTileViewport(index, split, tileSize);
+    buffer.SetViewProjectionMatrices(viewMattix, projectionMatrix);
+}
+
+private void SetTileViewport(int index, int split)
+{
+    Vector2 offset = new Vector2(index % split, index / split);
+    buffer.SetViewport(new Rect(offset.x * tileSize , offset.y * tileSize, tileSize, tileSize));
+}
+```
+
+#### 2 Sampling Shadows
