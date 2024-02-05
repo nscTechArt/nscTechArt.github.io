@@ -576,3 +576,55 @@ float GetDirectionalShadowAttenuation(DirectionalShadowData data, Surface surfac
     return lerp(1.0, shadow, data.strength);
 }
 ```
+
+##### Attenuating Light
+
+我们已经计算出了每个投影灯的衰减值Attenuation，但是我很长时间都没有认识到这个值的正确意义。我最开始以为是像点光源那样，亮度和阴影强度与距离光源的距离相关。**Attenuation的意义在于：被投影的片段的颜色会因为受到阴影而减弱。**<br>有了这样的理解，我们就可以分别计算每个平行光所带来的衰减值了。我们将衰减值作为Light结构体的一个属性，并添加一个方法用来获取我们在`Shadows.hlsl`中定义的单个灯光的`DirectionShadowData`。修改GetDirectionalLight()，从而返回出包含atteuation的灯光结构体。<br>另外，我们需要在`Lighting.hlsl`中传递`surfaceWS`，并将灯光阴影所带来的衰减值纳入着色计算。
+
+```glsl
+// Light.hlsl 
+struct Light
+{
+    float3 color;
+    float3 direction;
+    float attenuation;
+}
+
+DirectionalShadowData GetDirectionalShadowData(int lightIndex)
+{
+    DirectionalShadowData data;
+    data.strength = _DirectionalLightShadowData[lightIndex].x;
+    data.tileIndex = _DirectionalLightShadowData[lightIndex].y;
+    return data;
+}
+
+Light GetDirectionalLight (int index, Surface surfaceWS)
+{
+    Light light;
+    light.color = _DirectionalLightColors[index].rgb;
+    light.diretion = _DirectionalLightDirections[index].xyz;
+    DirectionalShadowData shadowData = GetDirectionalShadowData(index);
+    light.attenuation = GetDirectionalShadowAttenuation(shadowData, surfaceWS);
+    return light;
+}
+```
+
+```glsl
+// Lighting.hlsl
+float3 IncomingLight(Surface surface, Light light)
+{
+    return saturate(dot(surface.normal, light.direction) * light.attenuation) * light.color;
+}
+
+float3 GetLighting (Surface surfaceWS, BRDF brdf)
+{
+    float3 color = 0;
+    for (int i = 0; i < GetDirectionalLightCount(); i++)
+    {
+        color += GetLighting(surfaceWS, brdf, GetDirectionalLight(i, surfaceWS));
+    }
+    return color;
+}
+
+```
+
