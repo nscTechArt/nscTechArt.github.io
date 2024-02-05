@@ -27,7 +27,6 @@ Unity基于ShadowMap实现了阴影的渲染，主要原理可以概括为：生
 
 ```c#
 // ShadowSettings Class
-
 using UnityEngine
 
 [System.Serializable]
@@ -57,7 +56,6 @@ public class ShadowSettings
 
 ```c#
 // CustomRenderPipelineAsset Class
-
 [SerializeField] private ShadowSettings shadows;
 ```
 
@@ -69,7 +67,6 @@ public class ShadowSettings
 
 ```c#
 // CameraRenderer Class
-
 public void Render (
     ScriptableRenderContext context, Camera camera,
     bool useDynamicBatching, bool useGPUInstancing,
@@ -96,7 +93,6 @@ private bool Cull (float maxShadowDistance) {
 ```
 ```c#
 // Lighting Class
-
 public void Setup (
     ScriptableRenderContext context, CullingResults cullingResults,
     ShadowSettings shadowSettings
@@ -109,7 +105,6 @@ public void Setup (
 
 ```c#
 // Shadows Class
-
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -144,7 +139,6 @@ public class Shadows
 
 ```c#
 // Lighting Class
-
 private Shadows shadows = new Shadows();
 
 public void Setup(...)
@@ -162,7 +156,6 @@ public void Setup(...)
 
 ```c#
 // Shadows Class
-
 private const int maxShadowedDirectionalLightCount = 1;
 
 private struct ShadowedDirectionalLight
@@ -184,7 +177,6 @@ private ShadowedDirectionalLight[] shadowedDirectionalLights =
 
 ```c#
 // Shadows Class
-
 private int shadowedDirectionalLightCount;
 
 public void Setup(...)
@@ -211,7 +203,6 @@ public void ReserveDirectionalShadows(
 
 ```c#
 // Lighting Class
-
 private void SetupDirectionalLight (int index, ref VisibleLight visibleLight)
 {
     dirLightColors[index] = visibleLight.finalColor;
@@ -221,3 +212,76 @@ private void SetupDirectionalLight (int index, ref VisibleLight visibleLight)
 ```
 
 ##### Creating the Shadow Atlas
+
+完成了对灯光的筛选，就要着手实现阴影的绘制了。我们把相关逻辑放在一个单独的方法`Render()`中，并在`Lighting`类调用这个方法。但实际上`Render()`也只是一个入口，我们将平行光阴影的渲染委托给另一个方法`RenderDirectionalShadows()`，这里存放真正的阴影渲染逻辑。
+
+```c#
+// Lighting Class
+shadows.Setup(context, cullingResults, shadowSettings);
+SetupLights();
+shadows.Render();
+```
+
+```c#
+// Shadows Class
+public void Render()
+{
+    if (shadowedDirectionalLightCount > 0)
+    {
+        RenderDirectionalShadows();
+    }
+}
+
+private void RenderDirectionalShadows() {}
+```
+<br>阴影渲染的逻辑从创建shadow map开始，也就是把投影的物体绘制到一张纹理中，在级联阴影的前提下，我们把这个贴图命名为*_DirectionalShadowAtlas*，纹理的分辨率我们已经设置好了，余下的就是确认纹理的位深、格式、filterMode。**请注意，shadow map的纹理设置要考虑不同平台的要求。**<br>当然，既然我们创建了一个RenderTexture，也必然要考虑到RT的释放以及释放的时机。在我们的管线中，应该是在相机结束一次渲染时释放。<br>问题又来了，想CameraRenderer所写的释放RT的操作是不加逻辑判断的，所以我们必须考虑到如果场景没有阴影需要渲染，shadow map的RT没有创建的这种情况。同时，在一些较旧的图形API上，纹理和纹理采样器是绑定的，当shadow map RT没有被创建是，材质会使用默认贴图，也会使用shadow map的采样器，二者是不匹配的。为了避免以上种种情况，我们可以在不绘制阴影时创建一个dummy shadow map。
+
+```c#
+// Shadows Class
+private int dirShadowAtlasID = Shader.PropertyToID("_DirectionalShadowAtlas");
+
+public void Render()
+{
+    if (shadowedDirectionalLightCount > 0)
+    {
+        RenderDirectionalShadows();
+    }
+    else
+    {
+        buffer.GetTemporaryRT(dirShadowAtlasID, 1, 1, 
+                              32, FilterMode.Bilinear, RenderTextureFormat.Shadowmap);
+    }
+}
+
+private void RenderDirectionalShadows() 
+{
+    int atlasSize = (int)settings.directional.atlasSize;
+    buffer.GetTemporaryRT(dirShadowAtlasID, atlasSize, atlasSize, 
+                         32, FilterMode.Bilinear, RenderTextureFormat.Shadowmap);
+}
+
+public void Cleanup()
+{
+    buffer.ReleaseTemporaryRT(dirShadowAtlasID);
+    ExecuteBuffer();
+}
+```
+
+```c#
+// Lighting Class
+public void Cleanup()
+{
+    shadows.Cleanup();
+}
+```
+
+```c#
+// CameraRenderer Class
+public void Render(...)
+{
+    ...
+    lighting.Cleanup();
+    Submit();
+}
+```
+
