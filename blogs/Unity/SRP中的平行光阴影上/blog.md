@@ -1,10 +1,10 @@
 ---
 layout: page
-permalink: /blogs/Unity/SRP中的平行光阴影/index.html
-title: SRP中的平行光阴影
+permalink: /blogs/Unity/SRP中的平行光阴影上/index.html
+title: SRP中的平行光阴影 上篇
 ---
 
-### SRP中的平行光阴影
+### SRP中的平行光阴影 上篇
 
 这篇博客主要翻译自[Catlike的博客](https://catlikecoding.com/unity/tutorials/custom-srp/directional-shadows/)，我想试着从管线和Shader的角度全面地剖析Unity中阴影是如何绘制出来的。请注意，我们将直接考虑级联形式的阴影的实现。
 
@@ -628,3 +628,6 @@ float3 GetLighting (Surface surfaceWS, BRDF brdf)
 
 ```
 
+<br>进行到这一步，我们在max distance为10，shadow atlas分辨率为512的设置下获得的效果是这样的：<br>![](files/初步的阴影效果.png)
+
+<br>阴影的效果实在太差，不该有阴影的地方也会被伪影覆盖，形成像素带pixelated bands。产生这样效果的原因是：shadow map的分辨率有限，让片段表面产生了自阴影。
