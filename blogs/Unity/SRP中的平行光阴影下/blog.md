@@ -7,3 +7,269 @@ title: SRP中的平行光阴影 下篇
 ### SRP中的平行光阴影 下篇
 
 #### 3 Cascaded Shadow Maps
+
+因为平行光会影响max shadow distance以内的所有可投影物体，得到的shadow map需要覆盖很大一片区域。另外，因为我们是采用正交投影来计算shadow map的，shadow map内的每个纹理像素都有一个固定的world space分辨率。如果分辨率过大，会导致每个纹素都清晰可见，从而产生锯齿，已经一些小的阴影可能会消失。尽管可以通过增大阴影atlas的分辨率来缓解这种情况，但是也仅限于一定程度。
+
+当使用透视相机时，远处的物体会在视觉上较小。理论上最佳的阴影分辨率，应该是在任意可视距离上，shadow map的一个纹素可以映射到一个单独的camera target上的像素。所以接近摄像机的物体需要更高的分辨率，远处的物体则可以使用较低的分辨率，也就是说，我们应该根据接受投影的物体的距离使用多重分辨率的shadow map。
+
+级联阴影便是一个可行的解决方法。它的思路是，shadow- receiver会被渲染多次，以便每个光源在atlas中获得多个tile，这些tile被称为级联。第一个级联只覆盖靠近相机的一个小区域，随后级联会逐渐扩大覆盖范围，但纹素的总数量不变。Shader会为每个片段采样最合适的级联。
+
+级联阴影允许我们在不同的距离区域使用不同分辨率的shadow map，从而保证性能的同时也获取一个更好的视觉效果。
+
+##### Settings
+
+目前为止，我们仅仅实现了用一个级联去覆盖整个max shadow distance。我们调整`ShadowSettings`的代码，从而可以调整阴影的级联数量、每个级联所占的比例
+
+```c#
+// ShadowSettings Class
+public struct Directional
+{
+    public TextureSize atlasSize;
+    [Range(1, 4)] public int cascadeCount;
+    [Range(0f, 1f)] public float cascadeRation1, cascadeRation2, cascadeRation3;
+}
+public Directional directional = new Directinoal 
+{
+    atlasSize = TextureSize._1024,
+    cascadeCount = 4,
+    cascadeRatio1 = 0.1f,
+    cascadeRatio2 = 0.25f,
+    cascadeRatio3 = 0.5f
+};
+
+public Vecor3 CascadeRations => new Vector3(cascadeRaio1, cascadeRaio2, cascadeRaio3);
+```
+
+##### Rendering Cascades
+
+每个级联需要自己的转换矩阵，所以shadow matrices数组的大小需要在最大投影平行光的基础上再乘最大级联数量。同时在C#脚本和Shader中调整。
+
+因为现在每个灯光都会占用多个连续的tile，我们需要在`Shadows.ReserveDirectionalShadows()`调整tile偏移的计算方式，也就是乘上级联数量。此外，tile的总数量也需要调整。在这里我对split的理解是，split是对分辨率在数字上的分割，1024被split两份，每份便是512，也就是一个shadow atlas会被分割为`split ^ 2`份，当split等于二，总共有4个tile，当split等于四，总共有16个tile。
+
+```c#
+// Shadows Class
+private void RenderDirectionalShadows()
+{
+    ...
+    int tiles = shadowedDirectionalLightCount * setting.directional.cascadeCount;
+    int split = tiles <= 1 ? 1 : tiles <= 4 ? 2 : 4;
+    int tileSize = atlasSize / split;
+	...
+}
+
+public Vector2 ReserveDirectionalShadows(Light light, int visibleLightIndex)
+{
+    if (...)
+    {
+        shadowedDirectionalLights[shadowedDirectionalLightCount] =
+            new ShadowedDirectionalLight { visibleLightIndex = visibleLightIndex };
+        return new Vector2(light.shadowStrength, settings.directional.cascadeCount * shadowedDirectionalLightCount++);
+    }
+    return Vector2.zero;
+}
+```
+
+级联阴影下，需要对每个级联绘制阴影，也就是循环调用`cullingResults.ComputeDirectionalShadowMatricesAndCullingPrimitives()`和`context.DrawShadows()`
+
+```c#
+// Shadows Class
+private void RenderDirectionalShadows(int index, int split, int tileSize)
+{
+    ShadowedDirectionalLight light = shadowedDirectionalLights[index];
+    ShadowDrawingSettings shadowDrawingSettings = ...;
+    
+    int cascadeCount = settings.directional.cascadeCount;
+    int tileOffset = index * cascadeCount;
+    Vector3 ratios = settings.directinoal.CascadeRatios;
+    
+    for (int i = 0; i < cascadeCount; i++)
+    {
+        cullingResults.ComputeDirectionalShadowMatricesAndCullingPrimitives(
+        light.visibleIndex, i, cascadeCount, ratios, tileSize, 0f,
+        out Matrix4x4 viewMatrix, out Matrix4x4 projectionMatrix, out ShadowSplitData splitData);
+        shadowDrawingSettings.splitData = splitData;
+        int tileIndex = tileOffset + i;
+        dirShadowMatrices[tileIndex] = ConvertToAtlasMatrix(projectionMatrix * viewMatrix, SetTileViewport(tileIndex, split, tileSize), split);
+        buffer.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
+        ExecuteBuffer();
+        context.DrawShadows(ref shadowDrawingSettings);
+    }
+}
+```
+
+##### Culling Spheres
+
+Unity通过一个Culling Sphere来确定每个级联所覆盖的区域。剔除是球形的，但是阴影的投影是正交且正方形的，所以Culling Sphere还会包围投影周围的一些区域，这也是为什么一些因为在剔除区域以外也是可见的。
+
+CullingSphere是Unity为我们创建的，它被包含在`ComputeDirectionalShadowMatricesAndCullingPrimitives`的`ShadowSplitData`中。此外，平行光的照射角度与Culling Sphere并没有什么关系，所有平行光都会使用同一套CullingSpheres。所以我们只需要从splitData中获取一次就可以，因为级联对所有灯光都是等价的。
+
+我们在Shader中判断使用哪个级联，所以就需要判断片段是否在球体中，方法是比较片段和cullingSphere中心的平方距离与cullingSphere的平方半径。我们应该在获取culling Sphere之后就计算出平方半径，这样就不用在Shader里再次计算了。
+
+```c#
+// Shadows Class
+private int 
+	cascadeCountID = Shader.PropertyToID("_CascadeCount"),
+	cascadeCullingSpheresID = Shader.PropertyToID("_CascadeCullingSphere");
+
+private static Vector4[] cascadeCullingSpheres = new Vector4[maxCascades];
+
+private void RenderDirectionalShadows () {
+    …
+    buffer.SetGlobalInt(cascadeCountId, settings.directional.cascadeCount);
+    buffer.SetGlobalVectorArray(
+        cascadeCullingSpheresId, cascadeCullingSpheres
+    );
+    buffer.SetGlobalMatrixArray(dirShadowMatricesId, dirShadowMatrices);
+    buffer.EndSample(bufferName);
+    ExecuteBuffer();
+}
+
+private void RenderDirectionalShadows(int index, int split, int tileSize)
+{
+	...
+    for (int i = 0; i < cascadeCount; i++)
+    {
+        cullingResults.ComputeDirectionalShadowMatricesAndCullingPrimitives(...);
+        shadowDrawingSettings.splitData = splitData;
+        if (index == 0)
+        {
+            Vector4 cullingSphere = splitData.cullingSphere;
+            cullingSphere.w *= cullingSphere.w;
+            cascadeCullingSpheres[i] = cullingSphere;
+        }
+        ...
+    }
+}
+```
+
+##### Sampling Cascades
+
+首先是在`Shadows.hlsl`中定义管线中传进的值。级联的索引应该是根据片段决定，而不是逐灯的，所以我们新建一个`ShadowData`结构体来存储下标，同时创建一个方法从结构体中获取下标。
+
+```glsl
+// Shadows.hlsl
+CBUFFER_START(_CustomShadows)
+	int _CascadeCount;
+	float4 _CascadeCullingSpheres[MAX_CASCADE_COUNT];
+	float4x4 _DirectionalShadowMatrices
+		[MAX_SHADOWED_DIRECTIONAL_LIGHT_COUNT * MAX_CASCADE_COUNT];
+CBUFFER_END
+    
+struct ShadowData
+{
+    int cascadeIndex;
+};
+    
+ShadowData GetShadowData(Surface surfaceWS)
+{
+    ShadowData data;
+    data.cascadeIndex = 0;
+    return data;
+}
+```
+
+因为级联的引入，`GetDirectionalShadowData`这个方法所计算的tile的偏移已经改变了，我们要把ShadowData作为`GetDirectionalShadowData`的新参数，从而让后续灯光阴影的采样不会出错。为了保证Shader正常编译，要确保各个方法的参数都是正确的。
+
+```glsl
+// Light.hlsl
+DirectionalShadowData GetDirectionalShadowData(int index, ShadowData shadowData)
+{
+	DirectinalShadowData data;
+	data.strength = _DirectionalLightShadowData[index].x;
+	data.tileIndex = _DirectionalLightShadowData[index].y + shadowData.cascadeIndex;
+}
+
+Light GetDirectionalLight(int index, Surface surfaceWS, ShadowData shadowData)
+{
+    ...
+    DirectionalShadowData dirShadowData = GetDirectionalShadowData(index, shadowData);
+    light.attenuation = GetDirectionalShadowAttenuation(dirShadowData, surfaceWS);
+    return light;
+}
+```
+
+```glsl
+// Lighting.hlsl
+float3 GetLighting (Surface surfaceWS, BRDF brdf)
+{
+    ShadowData shadowData = GetShadowData(surfaceWS);
+    float3 color = 0;
+    for (int i = 0; i < GetDirectionalLightCount(); i++)
+    {
+        Light light = GetDirectionalLight(i, surfaceWS, shadowData);
+        color += GetLighting(surfaceWS, brdf, light);
+    }
+    return color;
+}
+```
+
+不过现在的ShadowData里，cascadeIndex默认是0。前面提到，我们要通过比较片段到cullingSphere中心的平方距离与culling Sphere的平方半径。我们可以在`Common.hlsl`中创建一个新的方法来计算平方距离。
+
+```glsl
+// Common.hlsl
+float DistanceSquared(float3 pA, float3 pB)
+{
+    return dot(pA - pB, pA - pB);
+}
+```
+
+我们在`GetShadowData`中循环查看所有级联culling spheres，看看是哪一个包含了当前的片段，一旦确认就可以结束循环了，然后使用当前循环的迭代器作为级联索引。当然了，如果一个片段不被任何一个culling sphere包含，我们最终会得到一个无效索引。
+
+```glsl
+// Shadows.hlsl
+ShadowData GetShadowData(Surface surfaceWS)
+{
+    ShadowData data;
+    
+    int i;
+    for (i = 0; i < _CascadeCount; i++)
+    {
+        float4 cullingSphere = _CascadeCullingSpheres[i];
+        float distanceSqr = DistanceSquared(surfaceWS.position, cullingSphere.xyz);
+        if (distanceSqr < cullingSphere.w)
+            break;
+    }
+   
+    data.cascadeIndex = i;
+   
+    return data;
+}
+```
+
+##### Culling Shadow Sampling
+
+超出最后一个级联的话，很可能就意味着没有有效的阴影数据，所以我们应该避免对这部分的shadow map进行采样。一个简单的方法是，在`ShadowData`中添加一个`renderShadow`字段，默认为1，如果超出最后一个级联就设置为0。把这个值应用在全局阴影衰减值上。
+
+```glsl
+// Shadows.hlsl
+struct ShadowData
+{
+	int cascadeIndex;
+    float renderShadow;
+}
+
+ShadowData GetShadowData (Surface surfaceWS)
+{
+    ShadowData data;
+    data.renderShadow = 1;
+    ...
+    if (i == _CascadeCount)
+    {
+        data.renderShadow = 0;
+    }
+    ...
+}
+```
+
+```glsl
+// Light.hlsl 
+DirectionalShadowData GetDirectionalShadowData(int lightIndex, ShadowData shadowData)
+{
+    DirectionalShadowData data;
+    data.strength = _DirectionalLightShadowData[lightIndex].x * shadowData.renderShadow;
+    data.tileIndex = _DirectionalLightShadowData[lightIndex].y + shadowData.cascadeIndex;
+    return data;
+}
+```
+
+##### Max Distance
