@@ -1,6 +1,6 @@
 ---
 layout: page
-permalink: /blogs/Unity/SPR-Batcher/index.html
+permalink: /blogs/Unity/SRP-Batcher/index.html
 title: SRP Batcher
 ---
 
