@@ -11,6 +11,7 @@ title: Unity
 - [**Unity中的AA**](https://lovewithyou.tech/blogs/Unity/Unity中的AA)
 - [**SRP中的平行光阴影 上篇**](https://lovewithyou.tech/blogs/Unity/SRP中的平行光阴影上)
 - [**SRP中的平行光阴影 下篇**](https://lovewithyou.tech/blogs/Unity/SRP中的平行光阴影下)
+- [**SRP中的平行光阴影 小结**](https://lovewithyou.tech/blogs/Unity/SRP中的平行光阴影小结)
 
 <br>
 

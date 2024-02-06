@@ -238,24 +238,24 @@ ShadowData GetShadowData(Surface surfaceWS)
 
 ##### Culling Shadow Sampling
 
-超出最后一个级联的话，很可能就意味着没有有效的阴影数据，所以我们应该避免对这部分的shadow map进行采样。一个简单的方法是，在`ShadowData`中添加一个`renderShadow`字段，默认为1，如果超出最后一个级联就设置为0。把这个值应用在全局阴影衰减值上。
+超出最后一个级联的话，很可能就意味着没有有效的阴影数据，所以我们应该避免对这部分的shadow map进行采样。一个简单的方法是，在`ShadowData`中添加一个`strength`字段，默认为1，如果超出最后一个级联就设置为0。把这个值应用在全局阴影衰减值上。
 
 ```glsl
 // Shadows.hlsl
 struct ShadowData
 {
 	int cascadeIndex;
-    float renderShadow;
+    float strength;
 }
 
 ShadowData GetShadowData (Surface surfaceWS)
 {
     ShadowData data;
-    data.renderShadow = 1;
+    data.strength = 1;
     ...
     if (i == _CascadeCount)
     {
-        data.renderShadow = 0;
+        data.strength = 0;
     }
     ...
 }
@@ -266,10 +266,121 @@ ShadowData GetShadowData (Surface surfaceWS)
 DirectionalShadowData GetDirectionalShadowData(int lightIndex, ShadowData shadowData)
 {
     DirectionalShadowData data;
-    data.strength = _DirectionalLightShadowData[lightIndex].x * shadowData.renderShadow;
+    data.strength = _DirectionalLightShadowData[lightIndex].x * shadowData.strength;
     data.tileIndex = _DirectionalLightShadowData[lightIndex].y + shadowData.cascadeIndex;
     return data;
 }
 ```
 
 ##### Max Distance
+
+让我们考虑一种情况，当max distance设置的较小时，可能最大的一个级联cullingSphere的覆盖范围超过了max distance，此时就会导致最后一个级联阴影突然消失，这种视觉效果是错误的。为了解决这个问题，我们可以让阴影在到达max distance时停止渲染，我们将max distance传入GPU
+
+```c#
+// Shadows Class
+
+private static int shadowDistanceID = Shader.PropertyToID("_ShadowDistance");
+
+private void RenderDirectionalShadows()
+{
+    ...
+    buffer.SetGlobalFloat(shadowDistanceID, settings.maxDistance);
+    buffer.EndSample(bufferName);
+    ExecuteBuffer();
+}
+```
+
+Max Shadow Distance是基于观察空间内的深度值，并非相对于相机位置的深度。所以为了实现在max distance的culling，我们该需要知道片段的深度，所以我们最好调整一下`Surface`
+
+```glsl
+// Surface.hlsl
+struct Surface
+{
+	float3 position;
+	...
+	float depth;
+	...
+};
+```
+
+dept的值我们可以在`LitPassFragment`中通过世界空间下的position到观察空间的转换获取，因为这个转换只是相对于世界空间的旋转和偏移，因为深度值在世界空间和观察空间中都是相等的。
+
+```glsl
+// LitPass.hlsl
+float4 LitPassFragment(Varyings input) : SV_Target
+{
+    ...
+    surface.viewDirection = normalize(_WorldSpaceCameraPos - input.positionWS);
+    surface.depth = -TransformWorldToView(input.positionWS).z;
+}
+```
+
+之前我们在`Shadows.hlsl`的`GetShadowData`里，将strength初始化为1。现在让我们给render Shadow的初始化添加一个条件，只有当片段的深度小于max shadow distance时，才执行这个初始化。
+
+```glsl
+// Shadows.hlsl
+
+CBUFFER_START(_CustomShadows)
+    ...
+    float _ShadowDistance;
+CBUFFER_END
+    
+ShadowData GetShadowData (Surface surfaceWS)
+{
+    ShadowData data;
+    data.strength = surfaceWS.depth < _ShadowDistance ? 1.0 : 0.0;
+    ...
+}
+```
+
+这样一来，阴影剔除就包含了基于max shadow、也就是基于深度的部分了。
+
+![](files/基于深度的阴影剔除.png)
+
+##### Fading Shadows
+
+阴影突然截断消失的效果不太美观，作为技术美术能忍吗？不能忍！我们可以使用线性渐变来让阴影的过渡更加平滑，渐变从max distance之前的一段距离开始，直到max distance的强度为0。我们把公式
+$$
+(1 - d/m)/f
+$$
+计算得到的值钳制在【0，1】的范围内，用来表示衰减关系。其中*d*代表片段深度值，*m*代表max shadow distance，*f*代表衰减范围，以max distance的一部分来表示。让我们把这个衰减范围*f*在`ShadowSettings`中暴露出来。因为max distance和*f*都要做出除数，限制这俩数的最小值不为0。
+
+```c#
+// ShadowSettings Class
+[Min(0.001f)] public float maxDistance = 100f;
+[Range(0.001f, 1f)] public float distanceFade = 0.1f;
+```
+
+衰减距离同样需要传进GPU，我们可以将它和max Distance一并打包，同时因为公式中两个数都是作为除数，我们在传给GPU之前就预先进行除法运算，从而避免在Shader里使用效率相对不高的除法。
+
+```c#
+// Shadows Class
+private static int shadowDistanceFadeID = Shader.PropertyToID("_ShadowDistanceFade");
+
+private void RenderDirectionalShadows()
+{
+    ...
+    buffer.SetGlobalVector(shadowDistanceFadeID, new Vector4(1f / settings.maxDistance, 1f / settings.distanceFade));
+}
+```
+
+```glsl
+// Shadows.hlsl
+CBUFFER_START(_CustomShadows)
+    ...
+    float _ShadowDistanceFade;
+CBUFFER_END
+    
+float FadeShadowStrength(float distance, float scale, float fade)
+{
+    return saturate((1.0 - distance * scale) * fade);
+}
+
+ShadowData GetShadowData (Surface surfaceWS)
+{
+    ShadowData data;
+    data.strength = FadeShadowStrength(surfaceWS.depth, _ShadowDistanceFade.x, _ShadowDistanceFade.y);
+    ...
+}
+```
+
