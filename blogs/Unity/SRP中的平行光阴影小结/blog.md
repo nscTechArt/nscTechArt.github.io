@@ -35,7 +35,7 @@ struct Light
 };
 ```
 
-**分析一个数据z的意义和作用，最好的办法就是看这个数据在哪里被定义，在何处被使用。**
+**分析一个数据的意义和作用，最好的办法就是看这个数据在哪里被定义，在何处被使用。**
 
 首先来看`Light`，它的前两个很好理解，就不再说明了，主要是`attenuation`，我最开始以为这个值是像点光源那样，照射亮度和阴影强度会随着光源的距离变大而衰减，但是按照我目前的理解，`attenuation`表示被投影片段的颜色会因为受到阴影而衰减。
 
@@ -48,18 +48,43 @@ float3 IncomingLight(Surface surface, Light light)
 }
 ```
 
-可以这么说，之所以定义出`ShadowData`和`DirectionalShadowData`，就是为了计算`light.attenuation`。那`light.attenuation`又是怎样被计算出来的呢？让我们把分散在各个hlsl文件中的相关联的代码都放在一起吧。
+可以这么说，之所以定义出`ShadowData`和`DirectionalShadowData`，就是为了计算`light.attenuation`。那`light.attenuation`又是怎样被计算出来的呢？概括来说，是将片段的位置转换到shadow texture space，然后作为uv在shadow map中采样。只不过因为我们使用的是级联阴影，采样需要明确采样的是哪个tile，转换片段的坐标需要则需要对应的矩阵，这个矩阵是我们在管线中计算好的，存在了一组矩阵数组中，我们通过`directionalShadowData.tileIndex`来告诉shader使用哪个矩阵为片段转换，从而明确了是哪个tile。采样完成后，就得到了灯光对应当前片段的衰减值，但是每个灯光可能会有对应的shadowStrength，该值是我们在unity编辑器中设置的，当然我们也在管线中将这个值传给了GPU，就是`directionalShadowData.strength`。
+
+我们明确了`light.attenuation`的计算过程后，再来分析一下`directionalShadowData`是如何配置的。我们知道，atlas会根据场景中投影灯光的数量分为数个tile，每个tile对应一个投影平行光。但是根据级联阴影的原理，我们知道每个灯光又会根据级联的数量渲染多次，数次渲染的结果会再次分割tile存储，这就是`shadowData.cascadeIndex`的作用。另外，级联阴影中，每个级联所对应的阴影强度通常是渐变的，也就是越靠近max shadow distance，阴影的强度越弱，直至为0，这个强度是相对全局的，不与灯光相关，所以我们要将这个值纳入单个灯光阴影强度的配置，这就是`shadowData.strength`的作用。以上分析可以结合源码来理解。
 
 ```glsl
-Light GetDirectionalLight(int index, Surface surfaceWS, ShadowData shadowData)
+DirectionalShadowData GetDirectionalShadowData(int lightIndex, ShadowData shadowData)
 {
-    Light light;
-    light.color = _DirectionalLightColors[index].rgb;
-    light.direction = _DirectionalLightDirections[index].xyz;
-    DirectionalShadowData dirShadowData = GetDirectionalShadowData(index, shadowData);
-    light.attenuation = GetDirectionalShadowAttenuation(dirShadowData, surfaceWS);
-    return light;
+    DirectionalShadowData data;
+    data.strength = _DirectionalLightShadowData[lightIndex].x * shadowData.strength;
+    data.tileIndex = _DirectionalLightShadowData[lightIndex].y + shadowData.cascadeIndex;
+    return data;
 }
 ```
 
-# 写不完了，先睡觉！
+---
+
+##### 总结
+
+```glsl
+// Shadows.hlsl
+struct ShadowData
+{
+	int cascadeIndex; // 单个投影平行光的级联索引，与采样shadow tile相关
+	float strength;   // 级联阴影带来的全局阴影强度
+}
+
+struct DirectionalShadowData
+{
+    int tileIndex;    // 确定单个投影平行光采样atlas的哪个tile
+    float strength;	  // unity编辑器中灯光shadow strength与当前级联的阴影强度相乘的结果
+};
+   
+// Light.hlsl
+struct Light
+{
+    float3 color;    
+    float3 direction; 
+    float attenuation; //被投影片段的颜色会因为受到阴影而带来的衰减值
+};
+```
