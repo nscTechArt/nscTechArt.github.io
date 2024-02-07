@@ -453,6 +453,8 @@ ShadowData GetShadowData (Surface surfaceWS)
 
 #### Shadow Quality
 
+> 有关Shadow Quality的知识对我来说还没有那么好理解，希望我以后能补充完这一部分，并完全理解。
+
 目前来看，我们已经实现了级联阴影的功能，现在还需要提高阴影质量。我们一直所观察到的伪影，也就是出现在本不该被投影的区域的阴影，也被称为shadow acne，它是由于和光线方向不完全一致的表面产生了错误的自阴影，当表面越来越与光线方向平行时，shadow arne就会越严重。
 
 增加atlas的尺寸可以减小纹素在世界空间下的尺寸，shadow arne会变小，但是伪影的数量也会增加，所以提升阴影质量还需要别的方法。
@@ -471,5 +473,79 @@ ShadowData GetShadowData (Surface surfaceWS)
 
 ##### Cascade Data
 
-由于acne的大小取决于世界空间的像素大小，因此一种适用于所有情况的一致方法必须考虑到这一点。由于每个级联的像素大小不同，这意味着我们需要向 GPU 发送更多的级联数据。为此，我们将在 `Shadows` 中添加一个通用的级联数据向量数组，并传进GPU。
+由于acne的大小取决于世界空间的像素大小，因此一种适用于所有情况的一致方法必须考虑到这一点。由于每个级联的像素大小不同，这意味着我们需要向 GPU 发送更多的级联数据。为此，我们将在 `Shadows` 中添加一个通用的级联数据向量数组，并传进GPU。 
+
+```glsl
+// Shadows Class
+private static int cascadeDataID = Shader.PropertyToID("_CascadeData");
+private static Vector4[] cascadeData = new Vector4[maxCascades];
+
+private void RenderDirectionalShadows()
+{
+    ...
+    buffer.SetGlobalVectorArray(cascadeDataID, cascadeData);
+    buffer.EndSample(bufferName);
+    ExecuteBuffer();
+}
+```
+
+我们可以做的一件事是将级联半径平方的倒数放入这些矢量的 X 分量中。这样，我们就不必在着色器中执行除法了。在一个新的 `SetCascadeData` 方法中执行此操作，同时存储剔除球并在 `RenderDirectionalShadows` 中调用。将级联索引、剔除球和瓦片大小作为浮点传给该方法。
+
+```glsl
+// Shadows Class
+
+private void RenderDirectionalShadows()
+{
+    ...
+    for(int i = 0; i < cascadeCount; i++)
+    {
+        ...
+        if (index == 0)
+        {
+            SetCascadeData(i, splitData.cullingSphere, tileSize);
+        }
+        ...
+    }
+}
+
+private void SetCascadeData(int index, Vector4 cullingSphere, float tileSize)
+{
+    cascadeData[index].x = 1f / cullingSphere.w;
+    cullingSphere.w *= cullingSphere.w;
+    cascadeCullingSpheres[index] = cullingSphere;
+}
+```
+
+```glsl
+// Shadows.hlsl
+CBUFFER_START(_CustomShadows)
+	int _CascadeCount;
+	float4 _CascadeCullingSpheres[MAX_CASCADE_COUNT];
+	float4 _CascadeData[MAX_CASCADE_COUNT];
+	…
+CBUFFER_END
+
+ShadowData GetShadowData (Surface surfaceWS)
+{   
+    data.strength *= FadeShadowStrength(distanceSqr, _CascadeData[i].x, _ShadowDistanceFade.z);
+}
+```
+
+##### Normal Bias
+
+之所以出现错误的自阴影，是因为shadow map上的纹素的覆盖范围比片段更大，从而导致投影的体积从物体表面中突出了一部分。缩小投射器可以解决这个问题，也会导致阴影小于应有的大小，从而引入不该存在的孔洞。
+
+我们也可以做相反的事情：在采样阴影时对表面进行膨胀。现在我们从表面稍远一点的地方采样，假设这个点足够远，就可以避免自阴影的产生。不过这也会稍微对阴影的位置产生影响，可能会在边缘出引起错位，并增加错误的阴影，但是这些伪影还是要远远好于Peter Panning。
+
+我们沿着表面的法线向量稍微移动表面的位置来采样阴影。如果我们只考虑一个维度，那么与世界空间的纹素大小相等的偏移距离因该就足够了。我们可以在SetCascadeData中通过将culling Sphere的直径处于tileSize来计算纹素的大小，将这个值存在cascadeData的Y向量中。
+
+```c#
+// Shadows Class
+private void SetCascadeData(int index, Vector4 cullingSphere, float tileSize)
+{
+    float texelSize = 2f * cullingSphere.w / tileSize;
+    cullingSphere.w *= cullingSphere.w;
+    cascadeCullingSpheres[index] = new Vector4(1f / cullingSphere.w, texelSize);
+}
+```
 
