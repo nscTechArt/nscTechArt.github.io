@@ -339,9 +339,9 @@ ShadowData GetShadowData (Surface surfaceWS)
 
 ##### Fading Shadows
 
-阴影突然截断消失的效果不太美观，作为技术美术能忍吗？不能忍！我们可以使用线性渐变来让阴影的过渡更加平滑，渐变从max distance之前的一段距离开始，直到max distance的强度为0。我们把公式
+阴影突然截断消失的效果不太美观，作为技术美术能忍吗？不能忍！我们可以使用线性渐变来让阴影的过渡更加平滑，渐变从max distance之前的一段距离开始，直到max distance的强度为0。我们把公式 
 $$
-(1 - d/m)/f
+\frac{1 - \frac{d}{m}}{f}
 $$
 计算得到的值钳制在【0，1】的范围内，用来表示衰减关系。其中*d*代表片段深度值，*m*代表max shadow distance，*f*代表衰减范围，以max distance的一部分来表示。让我们把这个衰减范围*f*在`ShadowSettings`中暴露出来。因为max distance和*f*都要做出除数，限制这俩数的最小值不为0。
 
@@ -383,4 +383,93 @@ ShadowData GetShadowData (Surface surfaceWS)
     ...
 }
 ```
+
+##### Fading Cascades
+
+目前我们实现了让阴影在达到max shadow distance时是线性衰减，而不是粗暴截断的。现在我们可以使用相同的方法，在最后级联的边缘淡化阴影。为此，我们在`ShadowSettings`中设置一个级联淡化阴影的滑块。
+
+```c#
+// ShadowSettings Class
+pubic struct Directional
+{
+    ...
+    [Range(0.001f, 1f)] public float cascadeFade;
+}
+public Directional directinal = new Directional
+{
+    ...
+    cascadeRatio3 = 0.5f,
+    cascadeFade = 0.1f
+}
+```
+
+只不过，我们在级联相关的阴影渐变中，使用的是非线性的公式
+$$
+\frac{1 - \frac{d^2}{r^2}}{1-(1-f)^2}
+$$
+其中*r*代表cullingSphere的半径，分母改变主要是为了保持渐变在级联之间的比例不变。接下来的步骤类似，我们把cullingSphere的半径同样打包进`shadowDistanceFade`中。在Shader中，我们要检查是否处于`GetShadowData`循环中的最后一个级联中，如果是的话，计算渐变阴影强度，并计入最终强度。
+
+```c#
+// Shadows Class
+private void RenderDirectionalShadows()
+{
+    ...
+    float f = 1f - settings.directional.cascadeFade;
+    buffer.SetGlobalVector(shadowDistanceFadeID,
+        new Vector4(1f / shadowSettings.maxDistance, 1f / shadowSettings.distanceFade, 1f / (1f - f * f));
+    buffer.EndSample(bufferName);
+    ExecuteBuffer();
+}
+```
+
+```glsl
+// Shadows.hlsl
+ShadowData GetShadowData (Surface surfaceWS)
+{
+	...
+    for (i = 0; i < _CascadeCount; i++)
+    {
+        float4 cullingSphere = _CascadeCullingSpheres[i];
+        float distanceSqr = DistanceSquared(surfaceWS.position, cullingSphere.xyz);
+        if (distanceSqr < cullingSphere.w)
+        {
+            if (i == _CascadeCOunt - 1)
+            {
+                data.strength *= FadeShadowStrenght(distanceSqr, 1.0 / cullingSphere.w, _ShadowDistanceFade.z);
+            }
+        }
+    }
+
+    if (i == _CascadeCount)
+    {
+        data.strength = 0;
+    }
+    
+    data.cascadeIndex = i;
+
+    return data;
+}
+```
+
+#### Shadow Quality
+
+目前来看，我们已经实现了级联阴影的功能，现在还需要提高阴影质量。我们一直所观察到的伪影，也就是出现在本不该被投影的区域的阴影，也被称为shadow acne，它是由于和光线方向不完全一致的表面产生了错误的自阴影，当表面越来越与光线方向平行时，shadow arne就会越严重。
+
+增加atlas的尺寸可以减小纹素在世界空间下的尺寸，shadow arne会变小，但是伪影的数量也会增加，所以提升阴影质量还需要别的方法。
+
+##### Depth Bias
+
+最简单的方法是，给shadow-caster的物体的深度添加一个恒定的偏移，将它们推离光线，这样就不会再出现错误的自阴影了。我们可以在渲染是应用全局深度偏移，在绘制阴影前在在缓冲区上调用SetGlobalDepthBias，然后将其设回零。这是在clip space中应用的深度偏移，其数值是非常小的，具体则取决于shadow map所使用的确切格式。
+
+但是，当深度偏移将shadow-caster推离光线时，采样的阴影也会向同一方向移动，当偏移量过大时，阴影就会被移到较远的距离，看起来就像是脱离了shadow-caster的物体，这种现象被称为Peter-Panning彼得平移。
+
+<img src="files/peterPanning.png" style="zoom:67%;" />
+
+另一种方法是应用斜率缩放偏置，方法是在 `SetGlobalDepthBias` 的第二个参数中使用非零值。该值用于沿 X 和 Y 维度缩放绝对剪辑空间深度导数的最高值。因此，对于正面照射的表面，该值为零；当光线在两个维度中至少有一个维度以 45° 角照射时，该值为 1；当表面法线与光线方向的点积为零时，该值接近无穷大。因此，当需要更多偏差时，偏差会自动增加，但没有上限。因此，消除粉刺所需的系数要低得多，例如 3 而不是 500000。
+
+斜率刻度偏差虽然有效，但并不直观。因此，让我们暂时放弃这个方法它，寻找一种更直观、更可预测的方法。
+
+##### Cascade Data
+
+由于acne的大小取决于世界空间的像素大小，因此一种适用于所有情况的一致方法必须考虑到这一点。由于每个级联的像素大小不同，这意味着我们需要向 GPU 发送更多的级联数据。为此，我们将在 `Shadows` 中添加一个通用的级联数据向量数组，并传进GPU。
 
