@@ -1,6 +1,6 @@
 ---
 layout: page
-permalink: /blogs/Code/Cherno-CPP/How-CPP-Works/index.html
+permalink: /blogs/Codes/Cherno-CPP/How-CPP-Works/index.html
 title: How C++ Works
 ---
 
