@@ -1,6 +1,6 @@
 ---
 layout: page
-permalink: /blogs/Code/Cherno-CPP/index.html
+permalink: /blogs/Codes/Cherno-CPP/index.html
 title: Cherno的C++入门系列教程
 ---
 
