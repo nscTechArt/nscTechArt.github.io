@@ -8,7 +8,7 @@ title: SRP中的平行光阴影 上篇
 
 这篇博客主要翻译自[Catlike的博客](https://catlikecoding.com/unity/tutorials/custom-srp/directional-shadows/)，我想试着从管线和Shader的角度全面地剖析Unity中阴影是如何绘制出来的。请注意，我们将直接考虑级联形式的阴影的实现。
 
-<br>本篇博客中的代码不能保证正确，可能一个手抖就写错了，所以请参照原链接。
+本篇博客中的代码不能保证正确，可能一个手抖就写错了，所以请参照原链接。
 
 #### 1 Rendering Shadows
 
@@ -21,9 +21,9 @@ Unity基于ShadowMap实现了阴影的渲染，主要原理可以概括为：生
 - 渲染阴影的最大距离
 - shadow map的分辨率
 
-<br>我们当然可以在相机的可视范围内将阴影完全绘制出来，但是这可能需要我们提供一个分辨率很高很高的shadow map，在实时渲染中是不可行的。为了便于我们更改阴影的设置，我们可以创建一个可序列化的类来管理。
+我们当然可以在相机的可视范围内将阴影完全绘制出来，但是这可能需要我们提供一个分辨率很高很高的shadow map，在实时渲染中是不可行的。为了便于我们更改阴影的设置，我们可以创建一个可序列化的类来管理。
 
-<br> 同时，因为Unity中不止平行光这一种形式的灯光，各个类型灯光的阴影的设置和实现方法存在区别，所以我们把平行光相关的设置单独放进一个结构体中。
+ 同时，因为Unity中不止平行光这一种形式的灯光，各个类型灯光的阴影的设置和实现方法存在区别，所以我们把平行光相关的设置单独放进一个结构体中。
 
 ```c#
 // ShadowSettings Class
@@ -52,18 +52,18 @@ public class ShadowSettings
 }
 ```
 
-<br>接下来，为我们的SRP管线实例化阴影的设置。
+接下来，为我们的SRP管线实例化阴影的设置。
 
 ```c#
 // CustomRenderPipelineAsset Class
 [SerializeField] private ShadowSettings shadows;
 ```
 
-<br>完成之后，我们就可以像URP那样在Inspector面板中修改阴影的相关参数了，虽然目前比URP简陋了很多。![](files/shadowSettings.png)
+完成之后，我们就可以像URP那样在Inspector面板中修改阴影的相关参数了，虽然目前比URP简陋了很多。![](files/shadowSettings.png)
 
-<br>不过目前我们的阴影设置还没有参与进管线，我们需要把shadow settings作为Custom RP Asset创建的参数之一，并进一步被传递给渲染每个相机时所调用的方法。本篇博客就暂且不展示这部分的代码了。
+不过目前我们的阴影设置还没有参与进管线，我们需要把shadow settings作为Custom RP Asset创建的参数之一，并进一步被传递给渲染每个相机时所调用的方法。本篇博客就暂且不展示这部分的代码了。
 
-<br>SRP中，场景中的相机逐次渲染。每个相机渲染阴影时，不能只考虑全局范围内的阴影设置，还需要把相机的剔除和灯光的设置纳入考虑范围。比如说渲染阴影的距离应该从Max Distance和相机的远裁截面中选择较小的那个，每个灯光的阴影也有强弱、软硬之分。我们在`CameraRender.Render`中修改相应的代码，并把shadow settings也作为参数传入灯光的设置中。
+SRP中，场景中的相机逐次渲染。每个相机渲染阴影时，不能只考虑全局范围内的阴影设置，还需要把相机的剔除和灯光的设置纳入考虑范围。比如说渲染阴影的距离应该从Max Distance和相机的远裁截面中选择较小的那个，每个灯光的阴影也有强弱、软硬之分。我们在`CameraRender.Render`中修改相应的代码，并把shadow settings也作为参数传入灯光的设置中。
 
 ```c#
 // CameraRenderer Class
@@ -135,7 +135,7 @@ public class Shadows
 }
 ```
 
-<br>当然，这只是阴影渲染的开始，之后所有的逻辑都会在`Shadows`这个类中实现，`Lighting`类所需要的只是将阴影的绘制添加进它的渲染流程。
+当然，这只是阴影渲染的开始，之后所有的逻辑都会在`Shadows`这个类中实现，`Lighting`类所需要的只是将阴影的绘制添加进它的渲染流程。
 
 ```c#
 // Lighting Class
@@ -166,9 +166,9 @@ private ShadowedDirectionalLight[] shadowedDirectionalLights =
     new ShadowedDirectionalLight[maxShadowedDirectionalLightCount];
 ```
 
-<br>现在，我们需要确定哪个灯光是需要投影的。为此，我们定义一个方法`ReserveDirectionalShadows()`，如果判断得到某个灯是投影的，我们把它加入我们的`ShadowedDirectionalLight[]`，并把它的索引一并存储。~~我们还会通过在阴影图集(shadow atlas)中为shadow map预留空间，并且存储渲染阴影所需要的信息。~~
+现在，我们需要确定哪个灯光是需要投影的。为此，我们定义一个方法`ReserveDirectionalShadows()`，如果判断得到某个灯是投影的，我们把它加入我们的`ShadowedDirectionalLight[]`，并把它的索引一并存储。~~我们还会通过在阴影图集(shadow atlas)中为shadow map预留空间，并且存储渲染阴影所需要的信息。~~
 
-<br>我们必须明确的是，如果判断一个灯光是需要投影的。目前，我们要考虑以下因素并在代码中实现
+我们必须明确的是，如果判断一个灯光是需要投影的。目前，我们要考虑以下因素并在代码中实现
 
 - 当前投影的灯光数量小于最大投影灯光数量
 - 灯光的投影模式不能为none
@@ -199,7 +199,7 @@ public void ReserveDirectionalShadows(
 }
 ```
 
-<br>如此一来，我们就可以在`Lighting`遍历灯光时插入这个方法了
+如此一来，我们就可以在`Lighting`遍历灯光时插入这个方法了
 
 ```c#
 // Lighting Class
@@ -234,7 +234,7 @@ public void Render()
 
 private void RenderDirectionalShadows() {}
 ```
-<br>阴影渲染的逻辑从创建shadow map开始，也就是把投影的物体绘制到一张纹理中，在级联阴影的前提下，我们把这个贴图命名为*_DirectionalShadowAtlas*，纹理的分辨率我们已经设置好了，余下的就是确认纹理的位深、格式、filterMode。**请注意，shadow map的纹理设置要考虑不同平台的要求。**<br>当然，既然我们创建了一个RenderTexture，也必然要考虑到RT的释放以及释放的时机。在我们的管线中，应该是在相机结束一次渲染时释放。<br>问题又来了，想CameraRenderer所写的释放RT的操作是不加逻辑判断的，所以我们必须考虑到如果场景没有阴影需要渲染，shadow map的RT没有创建的这种情况。同时，在一些较旧的图形API上，纹理和纹理采样器是绑定的，当shadow map RT没有被创建是，材质会使用默认贴图，也会使用shadow map的采样器，二者是不匹配的。为了避免以上种种情况，我们可以在不绘制阴影时创建一个dummy shadow map。
+阴影渲染的逻辑从创建shadow map开始，也就是把投影的物体绘制到一张纹理中，在级联阴影的前提下，我们把这个贴图命名为*_DirectionalShadowAtlas*，纹理的分辨率我们已经设置好了，余下的就是确认纹理的位深、格式、filterMode。**请注意，shadow map的纹理设置要考虑不同平台的要求。**<br>当然，既然我们创建了一个RenderTexture，也必然要考虑到RT的释放以及释放的时机。在我们的管线中，应该是在相机结束一次渲染时释放。<br>问题又来了，想CameraRenderer所写的释放RT的操作是不加逻辑判断的，所以我们必须考虑到如果场景没有阴影需要渲染，shadow map的RT没有创建的这种情况。同时，在一些较旧的图形API上，纹理和纹理采样器是绑定的，当shadow map RT没有被创建是，材质会使用默认贴图，也会使用shadow map的采样器，二者是不匹配的。为了避免以上种种情况，我们可以在不绘制阴影时创建一个dummy shadow map。
 
 ```c#
 // Shadows Class
@@ -285,7 +285,7 @@ public void Render(...)
 }
 ```
 
-<br>在创建完shadow map RT后，我们必须命令GPU绘制到Render Target上，而不是camera target上，这一步我们可以通过`buffer.SetRenderTarget()`来实现。考虑到这个RT是实时clear的，并且需要RT来存储shadow data。<br>作为阴影渲染的Render Target，我们需要考虑到depth buffer的clear，颜色缓存在此时不重要
+在创建完shadow map RT后，我们必须命令GPU绘制到Render Target上，而不是camera target上，这一步我们可以通过`buffer.SetRenderTarget()`来实现。考虑到这个RT是实时clear的，并且需要RT来存储shadow data。作为阴影渲染的Render Target，我们需要考虑到depth buffer的clear，颜色缓存在此时不重要
 
 ```c#
 // Shadows Class
@@ -301,7 +301,7 @@ private void RenderDirectionalShadows()
 }
 ```
 
-<br>此时，如果场景中有投影的平行光，就可以在frame debugger中看到阴影绘制的指令了![](files/clearing-two-render-targets.png)
+此时，如果场景中有投影的平行光，就可以在frame debugger中看到阴影绘制的指令了![](files/clearing-two-render-targets.png)
 
 ##### Shadows First
 
@@ -343,19 +343,21 @@ private void RenderDirectionalShadows()
 private void RenderDirectionalShadows(int index, int tileSize) {}
 ```
 
-<br>Unity SRP中绘制阴影是通过`context.DrawShadows()`实现的，它会将单个灯光的阴影绘制纳入管线之中，参数是一个`ShadowDrawingSettings`的结构体。让我们逐步配置好`ShadowDrawingSettings`，它包含以下属性
+Unity SRP中绘制阴影是通过`context.DrawShadows()`实现的，它会将单个灯光的阴影绘制纳入管线之中，参数是一个`ShadowDrawingSettings`的结构体。让我们逐步配置好`ShadowDrawingSettings`，它包含以下属性
 
 - cullingResult
 - lightIndex
 - projectionType
 - splitData：包含了给定的级联阴影的剔除信息， 决定如何渲染一个split的阴影
 
-<br>前三者可以直接通过`ShadowDrawingSettings`的构造函数设置，splitData则需要使用culllingResults中的`ComputeDirectionalShadowMatricesAndCullingPrimitives()`来获取。这个方法不仅能计算出splitData，还可以为我们提供两个别的重要数据：
+前三者可以直接通过`ShadowDrawingSettings`的构造函数设置，splitData则需要使用culllingResults中的`ComputeDirectionalShadowMatricesAndCullingPrimitives()`来获取。这个方法不仅能计算出splitData，还可以为我们提供两个别的重要数据：
 
 - 与平行光方向所匹配的view project矩阵
 - 一个clip space的立方体，这个立方体与包含可见光阴影的摄像机的可见区域重叠
 
-<br>Unity为什么要专门封装出一个这样的方法呢？这还要回到shadow map的原理上来：从光线的角度渲染场景，只存储深度信息，得到的结果代表着光线在照到物体之前经过了多远的距离。但是在Unity中，平行光的距离被设置为无限远，并不存在一个真实有效的位置，这就可以解释`ComputeDirectionalShadowMatricesAndCullingPrimitives()`的意义了。注意，这个方法也是级联阴影相关的，我们暂时都按不采用级联处理。<br>在提交绘制阴影的指令之前，我们还需要把绘制转换到平行光的视角。这样，单个平行光的阴影绘制就算完成了。
+Unity为什么要专门封装出一个这样的方法呢？这还要回到shadow map的原理上来：从光线的角度渲染场景，只存储深度信息，得到的结果代表着光线在照到物体之前经过了多远的距离。但是在Unity中，平行光的距离被设置为无限远，并不存在一个真实有效的位置，这就可以解释`ComputeDirectionalShadowMatricesAndCullingPrimitives()`的意义了。注意，这个方法也是级联阴影相关的，我们暂时都按不采用级联处理。
+
+在提交绘制阴影的指令之前，我们还需要把绘制转换到平行光的视角。这样，单个平行光的阴影绘制就算完成了。
 
 ```c#
 // Shadows Class
@@ -380,9 +382,9 @@ private void RenderDirectionalShadows(int index, int tileSize)
 
 虽然目前来看，管线上的工作已经准备好了，但是我们的阴影图集并没有被绘制上任何内容。这是因为`context.DrawShadows()`只会渲染材质中包含`ShadowCasterpass`的物体。`ShadowCasterpass`与`LitPass`类似，它的顶点着色器和片段着色器中传递的数据更少，同时因为我们只需要写入深度指，我们可以添加`ColorMask 0`而不向`SV_Target`输出任何内容。
 
-##### Mutiple Lights
+##### Multiple Lights
 
-终于，我们可以着手实现多个平行光的阴影了。让我们调整最大可投影平行光的数量。<br>按照我们之前的代码，场景中现在多个平行光阴影的shadow map会叠加在一张图上。我们需要的效果是将一个atlas分割为多个tile，平行光的shadowmap绘制在对应的tile中。这也是需要调整的一部份。
+终于，我们可以着手实现多个平行光的阴影了。让我们调整最大可投影平行光的数量。按照我们之前的代码，场景中现在多个平行光阴影的shadow map会叠加在一张图上。我们需要的效果是将一个atlas分割为多个tile，平行光的shadowmap绘制在对应的tile中。这也是需要调整的一部份。
 
 ```c#
 // Shadows Class
