@@ -11,3 +11,5 @@ title: LearnOpenGL
 #### Getting Started
 
 - [**Hello Window**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/GettingStarted/HelloWindow)
+- [**Hello Triangle**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/GettingStarted/HelloTriangle)
+
