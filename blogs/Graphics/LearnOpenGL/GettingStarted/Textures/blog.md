@@ -1,0 +1,85 @@
+---
+layout: page
+permalink: /blogs/Graphics/LearnOpenGL/GettingStarted/Textures/index.html
+title: Textures
+---
+
+### Textures
+
+---
+
+这篇博客我们来讨论纹理。
+
+为了实现纹理映射，我们需要告诉每个顶点它所对应的是纹理的哪一部分。因为，每个顶点都应该有一个纹理坐标，用来指定从纹理的哪个部分采样，然后由片段插值完成剩余的工作。
+
+对于2D纹理来说，纹理坐标由x轴和y轴构成，范围是[0, 1]。使用纹理坐标检索纹理中的颜色被称为采样，纹理坐标的左下角是[0, 0]，右上角是[1, 1]。下图展示了我们如何将纹理坐标映射到三角形上。
+
+![](files/tex_coords.png)
+
+我们为三角形指定三个纹理坐标，就像上图所示。我们只需要将三个纹理坐标传给vertex shader，经过插值，fragment shader中就会得到每个fragment所对应的纹理坐标。
+
+我们将三个纹理坐标定义出来:
+
+```c++
+float texCoords[] =
+{
+    0.0f, 0.0f,  // lower-left corner
+    1.0f, 0.0f,  // lower-right corner
+    0.5f, 1.0f   // top-center corner
+};
+```
+
+纹理采样的的解释比较宽泛，可以有多种方式，因为，我们的工作就是告诉OpenGL如何对纹理进行采样。
+
+---
+
+纹理坐标的范围是确定的，就在0和1之间，那超出这个范围的坐标应该如何采样呢，OpenGL提供了多种方式。
+
+- `GL_REPEAT`：默认选项，会重复纹理
+- `GL_MIRRORED_REPEAT`：与`GL_REPEAT`相同，但是在重复时会镜像处理
+- `GL_CLAMP_TO_EDGE`：将坐标钳制在 0 和 1 之间，结果是较高的坐标被钳制在边缘上，导致边缘图案拉伸
+- `GL_CLAMP_TO_BORDER`：超出范围的坐标会显示用户指定的边框颜色
+
+![](files/texture_wrapping.png)
+
+上述的每个选项可以通过`glTexParameter*`对每个坐标轴单独设置。
+
+```c++
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+```
+
+如果我们想使用GL_CLAMP_TO_BORDER，还需要指定边框的颜色。
+
+```c++
+float borderColor[] = {1, 1, 0, 1};
+glTexParameterfv(GL_TEXTURE_2D,  GL_CLAMP_TO_BORDER, borderColor);
+```
+
+---
+
+虽然纹理坐标并不依赖分辨率，但是就可以是浮点值，这样OpenGL就必须明确纹理坐标要映射到哪一个texel。试想有一个很大的物体和一个分辨率很低的纹理，这就是为什么我们需要texture filtering。OpenGL中，我们通常会使用这两个filtering mode
+
+- GL_NEAREST：也被称为point filtering，这是OpenGL的默认选项。在这个模式下，OpenGL会选择距离纹理坐标最近的texel
+- GL_LINEAR：也被称为bilinear filtering，这个模式下，会从纹理坐标的相邻texel中提取一个内插值，近似于texel之间的颜色。从纹理坐标到texel中心的距离越小，该texel的颜色对采样颜色的贡献就越大texel
+
+GL_NEAREST 会产生像素状图案，我们可以清楚地看到构成纹理的像素，而 GL_LINEAR 则会产生更平滑的图案，单个像素不太明显。GL_LINEAR 会产生更逼真的输出效果，但有些开发人员更喜欢 8 位效果，因此会选择 GL_NEAREST。
+
+![](files/texture_filtering.png)
+
+filtering mode也是通过调用`glTexParameter*`实现的，同时，我们也要指定出是在放大还是缩小纹理时所使用的filtering mode
+
+```c++
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+```
+
+---
+
+想象这样一个场景，我们有一个很大的房间，其中有上千个物体，每个物体都有贴图。这样的话，即使距离观察者很远的物体也会使用与较近物体相同分辨率的贴图，但是较远的物体可能只会占据很少数量的片段，OpenGL就很难从高分辨率的贴图中获取对应的颜色，因为它必须要为跨度很大的纹理片段选择颜色，就会带来小物体上的artifacts。此外，小物体上使用高分辨率的贴图也会占用不必要的内存带宽。
+
+为了解决这个问题，OpenGL使用了Mipmaps这一概念，它是一个纹理图像集合，其中每个后续纹理都比前一个小两倍。Mipmap的原理很好理解，当与观察者的距离达到了一个明确距离时，OpenGL 将使用与当前距离最匹配的mipmap 纹理。由于物体距离较远，用户不会注意到较小的分辨率。这样，OpenGL 就能对正确的纹理进行采样，而且在对 mipmap 的这一部分进行采样时，涉及的缓存内存也会更少。让我们仔细看看 mipmap 纹理的外观：
+
+![](files/mipmaps.png)
+
+OpenGL提供了`glGenerateMipmap`为我们创建的贴图生成mipmaps。
