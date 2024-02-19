@@ -19,6 +19,7 @@ title: ABOUT ME
 
 > 热心的朋友可以加微信催更：zenyatta1900
 
+- 实现[URP下的高质量单独投影](https://zhuanlan.zhihu.com/p/501739296)
 - Unity中的反走样AA总结
 - ***Graphics***板块中的《SSAO的实现》
 - Unity中的SRP Batcher总结
@@ -26,5 +27,3 @@ title: ABOUT ME
 - Unity中的Voronoi噪声和风格化水面
 - 翻译[Unity音频相关的系列博客]([Made Indrayana – Medium](https://medium.com/@made-indrayana))
 - 整理[大衍神君关于静态资源的优化文档]([lwwhb/Unity2022_SUNTAIL_Stylized_Fantasy_Village_Optimization: 针对AssetStore上的SUNTAIL - Stylized Fantasy Village项目系统级优化 (github.com)](https://github.com/lwwhb/Unity2022_SUNTAIL_Stylized_Fantasy_Village_Optimization))
-- 检查博客访问量？
-- 博客留言系统？
