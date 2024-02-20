@@ -80,4 +80,123 @@ glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)width/(float)heigh
 $$
 Vclip=Mprojection⋅Mview⋅Mmodel⋅Vlocal
 $$
-在vertex shader中，我们将运算后的顶点位置传递给`gl_Position`，OpenGL会对clip space内的坐标执行透视除法，将其变换为NDC
+在vertex shader中，我们将运算后的顶点位置传递给`gl_Position`，OpenGL会对clip space内的坐标执行透视除法，将其变换为NDC，其中每个坐标对应屏幕上的一个像素，这一过程被称为viewport transformation
+
+---
+
+想绘制3D物体，我们首先要创建一个model matirx，这个矩阵包含了平移、缩放、旋转。让我们将我们的平面绕着x轴旋转一定角度，看起来像是躺在地面上，model matrix可以这么写
+
+```c++
+glm::mat4 model = glm::mat4(1.0f);
+model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+```
+
+因为这个矩阵可以让我们的平面呈现出躺在地面上的效果，我们就姑且认为变换进world space里了，然后就可以研究怎么创建view matrix了。假定物体当前在world space的原点上，我们需要将摄像机稍稍向后移动，这样才能让平面出现在镜头前。**将摄像机向后移动 = 将整个场景向前移动**。这也是实际上view matric所做的工作，将场景向摄像机想要移动的反方向移动。
+
+OpenGL采用右手坐标系，也就说，摄像机朝向的是-z，这也是整个场景要移动的方向。view matrix的创建代码如下：
+
+```c++
+glm::mat4 view = glm::mat4(1.0f);
+view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+```
+
+下一个是projection matrix，我们采用透视投影。
+
+```c++
+glm::mat4 projection;
+projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+```
+
+这三个矩阵还需要在vertex shader中使用，让我们声明出来，并与顶点位置相乘。
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(aPos, 1.0f);
+}
+```
+
+同样的，这三个值需要我们在C++中传递给shader，这里只以model matrix为例
+
+```c++
+int modelLoc = glGetUniformLocation(ourShader.ID, "model");
+glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+```
+
+---
+
+截至目前，我们还是在操作一个2D平面，现在让我们试着操作一下一个3D立方体，总共有36个顶点。
+
+我们可以试着让立方体随时间而旋转
+
+```c++
+model = glm::rotate(model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
+```
+
+因为我们没有指定索引，所以需要用`glDrawArrays`绘制
+
+```c++
+glDrawArrays(GL_TRIANGLES, 0, 36);
+```
+
+不过这样所绘制的[立方体效果是很奇怪的](https://learnopengl.com/video/getting-started/coordinate_system_no_depth.mp4)。立方体的一些面正被其他面覆盖着。这是因为当OpenGL逐个三角形、逐个片段地绘制你的立方体时，会覆盖已经绘制在那里的任何像素颜色。由于在同一绘制调用中，OpenGL并不保证三角形渲染的顺序，所以有些三角形即使明显应该在另一个前面，也可能被绘制在另一个三角形的上方。
+幸运的是，OpenGL在称为z缓冲区的缓冲区中存储深度信息，允许OpenGL决定何时覆盖一个像素，何时不覆盖。使用z缓冲区，我们可以配置OpenGL进行深度测试。
+在计算机图形学中，z缓冲是一种实现深度测试的技术，可以解决部分叠加问题。简而言之，OpenGL不一定按照三维空间中的前后顺序来绘制物体。有时候，可能会先绘制远处的物体，再绘制近处的物体，这就造成了深度错误，导致近处的物体被远处的物体覆盖。使用z缓冲区，可以给每个像素分配一个深度值，新的图形在绘制时会检查这个深度值，如果新的图形更靠近观察者，那么它就可以覆盖原来的像素，否则，就放弃绘制，以此解决物体的正确覆盖问题。
+
+---
+
+OpenGL将所有的深度信息存放在Z-buffer中。GLFW会自动为我们创建这个depth buffer，深度值被存储在每个片段的z值中。**当一个片段想要输出颜色时，OpenGL会将当前fragment的深度值与z-buffer中的深度值作比较，如果当前fragment在其他fragment后面，这个fragment就会被丢弃，否则就会覆写。这也是OpenGL自动完成的，称为深度测试。**不过深度测试默认时关闭的，我们需要激活它
+
+```c++
+glEnable(GL_DEPTH_TEST);
+```
+
+由于我们使用的是深度缓冲区，因此我们还希望在每次渲染迭代之前清除深度缓冲区（否则，上一帧的深度信息将保留在缓冲区中）。就像清除颜色缓冲区一样，我们可以通过在 `glClear` 函数中指定`DEPTH_BUFFER_BIT`位来清除深度缓冲区：
+
+```
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+```
+
+---
+
+假设我们想在屏幕上显示 10 个立方体。每个立方体看起来都一样，但只是在世界上的位置不同，每个立方体的旋转方式都不同。立方体的graphicla layout已经定义好了，因此在渲染更多对象时，我们不必更改缓冲区或属性数组。对于每个对象，我们唯一需要改变的是它的model矩阵
+
+首先，我们为每个方块定义出它们在世界空间中的位置
+
+```c++
+glm::vec3 cubePositions[] = {
+    glm::vec3( 0.0f,  0.0f,  0.0f), 
+    glm::vec3( 2.0f,  5.0f, -15.0f), 
+    glm::vec3(-1.5f, -2.2f, -2.5f),  
+    glm::vec3(-3.8f, -2.0f, -12.3f),  
+    glm::vec3( 2.4f, -0.4f, -3.5f),  
+    glm::vec3(-1.7f,  3.0f, -7.5f),  
+    glm::vec3( 1.3f, -2.0f, -2.5f),  
+    glm::vec3( 1.5f,  2.0f, -2.5f), 
+    glm::vec3( 1.5f,  0.2f, -1.5f), 
+    glm::vec3(-1.3f,  1.0f, -1.5f)  
+};
+```
+
+然后，我们需要调用十次glDrawArrays，只不过这次我们需要在每次绘制时修改model矩阵
+
+```c++
+glBindVertexArray(VAO);
+for (unsigned int i = 0; i < 10; i++)
+{
+	glm::mat4 model = glm::mat4(1.0f);
+	float angle = 20.0f * i;
+	model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+	ourShader.setMat4("model", model);
+	
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+}
+```
+
