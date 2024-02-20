@@ -83,3 +83,59 @@ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 ![](files/mipmaps.png)
 
 OpenGL提供了`glGenerateMipmap`为我们创建的贴图生成mipmaps。
+
+在渲染过程中切换mipmap层级时，可能会带来一些失真的视觉效果，比如在两个层级之间会出现一个清晰的边缘。就像普通的纹理贴图一样，纹理filtering在切换mipmap曾几时也可以使用。OpenGL为我们提供了四个选项：
+
+- `GL_NEAREST_MIPMAP_NEAREST`
+- `GL_LINEAR_MIPMAP_NEAREST`
+- `GL_NEAREST_MIPMAP_LINEAR`
+- `GL_LINEAR_MIPMAP_LINEAR`
+
+---
+
+我们要研究一下贴图要如何加载进我们的项目，为了方便，我们可以直接引入图片载入的库，如`stb_image.h`。我们将这个头文件加入项目中后，还需要创建一个C++文件，它包含了以下代码。
+
+```c++
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+```
+
+通过定义 `STB_IMAGE_IMPLEMENTATION`，预处理器修改头文件，使其只包含相关的定义源代码，有效地将头文件转变为 .cpp 文件，就是这么简单。现在只需在你的程序中某处包含 `stb_image.h` 并编译即可。
+
+载入图片是通过`stbi_load`实现的
+
+```c++
+int width, height, nrChannels;
+unsigned char *data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+```
+
+这个函数的第一个参数是图片文件的存放位置，接下来的三个参数是图片的宽、高、通道的数量。
+
+---
+
+就像OpenGL的其他Object一样，纹理也是通过ID来引用的，也同样需要与它的object type绑定起来，这样后面的纹理相关的调用都是针对我们绑定过的纹理object的。
+
+```c++
+unsigned int texture;
+glGenTextures(1, &texture);
+glBindTexture(GL_TEXTURE_2D, texture);
+```
+
+当创建的纹理对象绑定好以后，我们就可以使用之前载入的图片信息来生成纹理了，使用的函数是`glTexImage2D`
+
+```c++
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+glGenerateMipmap(GL_TEXTURE_2D);
+```
+
+`glTexImage2D`的参数很多，我们来逐一探讨一下：
+
+- `target`:代表我们将载入的图片信息生成的texture object type
+- `level`:纹理mipmap的层级，level 0表示我们要创建的是base level
+- `internalFormat`：这个参数告诉OpenGL我们要用哪种格式存储纹理
+- `width`：纹理宽度
+- `height`：纹理高度
+- `border`：一定为0（历史遗留问题）
+- `format`：图片信息的格式
+- `type`：图片信息中像素的data type，因为我们是载入图片后将其存储在chars中，所以格式我们使用`GL_UNSIGNED_BYTE`
+- `data`：内存中图片信息的指针
