@@ -139,3 +139,119 @@ glGenerateMipmap(GL_TEXTURE_2D);
 - `format`：图片信息的格式
 - `type`：图片信息中像素的data type，因为我们是载入图片后将其存储在chars中，所以格式我们使用`GL_UNSIGNED_BYTE`
 - `data`：内存中图片信息的指针
+
+一旦`glTexImage2D`调用完成，当前绑定的texture object就读取上了我们载入的图片。然后再调用`glGenerateMipmap`来自动生成mipmap。另外，记得释放掉载入图片所分配的内存。
+
+总而言之，读取图片、加载纹理的过程大致如下：
+
+```c++
+unsigned int texture;
+glGenTextures(1, &texture);
+glBindTexture(GL_TEXTRUE_2D, texture);
+glTextureParamteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+glTextureParamteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_t, GL_REPEAT);
+glTextureParamteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAREST_MIPMAP_LINEAR);
+glTextureParamteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+int width, height, nrChannels;
+unsigned char *data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+if (data)
+{
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+}
+else
+{
+    std::cout << "Failed to load texture\n";
+}
+stbi_image_free(data);
+```
+
+---
+
+让我们将纹理绘制进一个矩形中，首先更新我们的vertex data，除了顶点位置与顶点颜色之外，还需要加入顶点坐标。
+
+```c++
+float vertices[] = {
+    // positions          // colors           // texture coords
+     0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
+     0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
+    -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
+    -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // top left 
+};
+```
+
+因为新增了一个顶点属性，我们需要告诉OpenGL新的vertex format
+
+![](files/vertex_attribute_pointer_interleaved_textures.png)
+
+```
+glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+glEnableVertexAttribArray(2);
+```
+
+然后，vertex shader需要将纹理坐标作为顶点属性声明，同时也要输出给fragment shader
+
+```glsl
+#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aColor;
+layout(location = 2) in vec2 aTexCoord;
+
+out vec3 ourColor;
+out vec2 texCoord;
+
+void main()
+{
+    gl_Position = vec4(aPos, 1.0);
+    ourColor = aColor;
+    texCoord = aTexCoord;
+}
+
+```
+
+fragment shader同样需要调整。除了要接收来自vertex shader输出的`texCoord`，fragment shader还需要可以访问texture object，但是我们要如何将texture object传给fragment shader呢？GLSL内置了一个针对texture object的数据类型`sampler`，也就说，我们声明一个`uniform sampler2D`就可以实现texture object的传入了。为了采样纹理，GLSL提供了一个内置函数`texture`，它将一个`sampler`作为第一个参数，将对应的纹理坐标作为第二个参数。
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+
+in vec3 ourColor;
+in vec2 texCoord;
+
+uniform sampler2D ourTexture;
+
+void main()
+{
+    FragColor = texture(ourTexture, texCoord);
+}
+```
+
+现在，只需要在调用绘制指令`glDrawElements`之前，将纹理绑定好，就会自动地将纹理传给fragment shader中的`sampler`
+
+```c++
+glBindTexture(GL_TEXTURE_2D, texture);
+glBindVertexArray(VAO);
+glDrawElements(GL_TRAIGNLES, 6, GL_UNSIGNED_INT, 0);
+```
+
+---
+
+在OpenGL中，Texture Unit（纹理单元）是一个非常重要的概念。纹理单元是在GPU上的特定硬件，用于处理纹理从GPU内存到最终渲染的流程。OpenGL支持同时的多个纹理，其实就是同时开启了多个纹理单元。这样可以为同一个顶点或者片段设置多个纹理（例如漫射纹理、镜面纹理等）。
+每个纹理单元有一个编号来标识它，OpenGL保证有至少16个纹理单元可供你使用（可能更多，取决于显卡）。这些纹理单元从`GL_TEXTURE0`开始定义，然后一直到`GL_TEXTURE15`。例如，使用如下代码设置纹理单元：
+
+```c++
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D, texture);
+```
+
+这里的 `glActiveTexture(GL_TEXTURE0)` 是激活了*texture unit 0*。之后所有的`GL_TEXTURE_2D`操作也会在这个单元上执行。**也就是说，我们绑定的纹理会绑定到当前激活的纹理单元上。**
+如果我们有多个纹理，可以激活不同的纹理单元，然后绑定相应的纹理到对应的单元上。在设定Uniform之前，你必须首先激活相应的纹理单元。
+最后，请注意，预期纹理单元数量的限制因硬件而异，一些老的硬件可能只支持两个纹理单元，而新的硬件（例如现代显卡）可能支持数十甚至数百个纹理单元。你可以使用 `glGetIntegerv(GL_MAX_TEXTURE_UNITS, &maxTextureUnits);` 检查你的硬件支持的最大纹理单元数量。
+
+---
+
+当我们给shader设置纹理时，一定要先激活shader program。设置纹理有两种方式：
+
+- `glUniform1i(glGetUniformLocation(ourShader.ID, "texture1"), 0);`
+- `customShader.setInt("texture1", 0);`(这个方法是我们自己定义的，不具备通用性)
+
+在绘制时，也需要以此激活texture unit，然后再绑定，OpenGL会自动将texture传值给shader中的`uniform sampler2D`

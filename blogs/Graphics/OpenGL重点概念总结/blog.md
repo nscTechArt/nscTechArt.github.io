@@ -67,13 +67,73 @@ VBO所对应的buffer type是`GL_ARRAY_BUFFER`
 
 ---
 
-#### glBufferData()
+#### glVertexAttribPointer
 
-glBufferData是一个专门用来把开发者定义的数据传进当前绑定的buffer的函数。第一个参数 是我们要将参数拷贝进的buffer type，因为我们此时绑定的是VBO，所以这个参数是`GL_ARRAY_BUFFER`。第二个参数是传进buffer 的data size。第三个参数是实际要传进buffer的数据。第四个参数是配置显卡如何管理我们传进的数据，有三种形式：
+在OpenGL中，我们需要自行告诉OpenGL如何理解vertex data，详细的函数声明如下：
 
-- **GL_STREAM_DRAW**：数据只设置一次，GPU 最多使用几次
-- **GL_STATIC_DRAW**：数据只设置一次，可多次使用
-- GL_DYNAMIC_DRAW：数据会经常改动，且使用频繁。
+```c++
+void glVertexAttribPointer( GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid * pointer);
+```
+
+就像函数名一样，`glVertexAttribPointer`本身并不直接提供数据，而是提供了一个指针，OpenGL将在渲染时为其提供对应的数据。
+
+
+
+以下是各个参数的简要说明：
+
+- `index`: 指定要配置的通用顶点属性数组的索引，对应在顶点shader中的layout(location = index)。
+- `size`: 指定每一个顶点属性的组件数量。有效的值为1, 2, 3, 4。例如，如果我们的位置是一个3D矢量，那么size就是3。
+- `type`: 指定数组中每个组件的数据类型。可能的值有：`GL_BYTE`, `GL_UNSIGNED_BYTE`, `GL_SHORT`, `GL_UNSIGNED_SHORT`, GL_INT,`GL_UNSIGNED_INT`, `GL_HALF_FLOAT`, `GL_FLOAT`, `GL_DOUBLE`, `GL_FIXED`。
+- `normalized`: 当normalized参数为`GL_TRUE`时，所有的**整数**数据将会被映射到0（对于无符号整数）或-1（对于有符号整数），到1之间。
+- `stride`: 步长，连续的顶点属性之间的间隔。
+- `pointer`: 在缓冲中第一个组件的字节偏移量。这通常设置为0。
+
+让我们进一步讨论一下`normalized`这个参数：在计算图形时，有些数据会被存储为非浮点格式，比如颜色通常会被存储为unsigned char(0 ~ 255)。然后，这些数据传送给shader时，shader往往需要对这些数据进行数学运算，显然使用范围在0/-1到1之间的float格式是对运算更友好的，所以，在某些情况下，需要将`normalized`设置为`GL_TRUE`来自动完成映射。
+
+`pointer`这个参数也是值得留意。`pointer`指定了buffer data开始的位置或偏移量。大部分情况下，我们都会从buffer的开始位置读取数据，也就是设置`pointer`为`(void*)nullptr`。
+
+但是，在有些情况下，我们需要在一个单一的buffer中存储不同种类的顶点数据，被称为*顶点数组内部格式(Interleaved vertex array formats)*。例如，如果在一个buffer中存储了位置、颜色，可能也有不同的数据组织形式
+
+- 先存储所有顶点的位置、然后再存储所有顶点的颜色，这时，读取颜色数据的`glVertexAttribPointer`调用会将`pointer`设为一个非零值，以跳过前面的位置数据。
+- 另一种情况是我们可能将位置和颜色数据交替存储（即位置0，颜色0，位置1，颜色1，……）。这种情况下，仍然需要为位置和颜色调用`glVertexAttribPointer`，但是两次调用的pointer参数将有所不同：读取位置数据的调用将`pointer`设为0，而读取颜色数据的调用将`pointer`设为对应位置数据大小的偏移量。
+
+
+
+这个函数实际上是在当前的顶点数组对象的缓冲区中存储或修改数据，它需要和`glBindBuffer`和`glBufferData`配合使用才可以完成数据的传输和配置。
+
+需要注意的时，在创建一个OpenGL程序时，OpenGL每个属性(位置、颜色、纹理坐标)默认是关闭的。当我们在执行glVertexAttribPointer时，我们实际上只是在定义一个数据格式，并告诉OpenGL如何理解这个数据，我们需要调用`glEnableVertexAttribArray(index)`来明确地启动顶点数组，然后OpenGL才能读取这个数据，其中的`index`与`glVertexAttribPointer`的`index`相同
 
 ---
 
+#### GL_LINEAR_MIPMAP_LINEAR
+
+这个值是用来设置OpenGL中纹理参数时使用的
+
+```c++
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+```
+
+对于初学者来说，这个语句中存在两个*LINEAR*，很容易混淆，其实它们代表了不同的操作：
+
+- 第一个 LINEAR：这是指在两个mipmap层级之间进行线性插值。当纹理被缩小到位于两个mipmap层级之间的大小时，OpenGL 会在相邻的两个mipmap层级中获取纹理，然后执行的线性插值。通过在两个mipmap层级之间进行混合，它可以得到一个更精确的颜色结果，并且在纹理在不同mipmap层级之间切换时，可以得到一个更平滑的过渡
+- 第二个 LINEAR：这是指在单个mipmap层级内部进行线性滤波。当需要从纹理获取颜色时，OpenGL 通常需要对纹理元素（也称为texels）进行采样。由于采样点一般不会刚好位于texel的中心，因此需要从周围的texel中进行插值来计算颜色。如果设置为LINEAR，OpenGL将会在最近的四个texel之间进行双线性插值；如果设置为NEAREST，OpenGL将只取最近的那个texel。
+
+**总结下来：它设置了在mipmap层级之间以及在纹理单元元素之间都使用线性插值**
+
+---
+
+#### OpenGL中的族函数 (以glTexParameter为例)
+
+`glTexParameter` 其实是一族函数的通称，包括 `glTexParameterf`，`glTexParameteri`，`glTexParameterfv` 和 `glTexParameteriv`。这些函数用于设置纹理参数，他们之间的唯一区别在于对象数据类型和参数的数量，函数名称末尾的"i"和"f"分别代表"integer"和"float"，"v"则代表"vector"，即一组数，也就是说：
+
+- glTexParameterf 和 glTexParameterfv 接受一个和多个浮点数（即 float）参数。
+- glTexParameteri 和 glTexParameteriv 接受一个和多个整数（即 int）参数。
+
+让我们分别举一个例子
+
+- `glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16.0f);`
+  - `glTexParameterf`函数接受浮点数值，此处的浮点数16.0f，设定了最大的各向异性等级。在最大各向异性级别16的设置下，OpenGL会进行更多的采样(取样)，以提高在各种角度上观察的纹理质量
+- `glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);`
+  - 参数`GL_LINEAR_MIPMAP_LINEAR`是一个整数常量。在OpenGL中，很多预设值往往被设置为整数常量，同时以字符串命名，例如这里的`GL_LINEAR_MIPMAP_LINEAR`，这样既维护了代码的可读性，也优化了性能。这就是为什么我们调用的是`glTexParameteri`而不是`glTexParameterf`
+
+---
