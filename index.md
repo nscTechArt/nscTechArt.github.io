@@ -20,6 +20,7 @@ title: ABOUT ME
 > 热心的朋友可以加微信催更：zenyatta1900
 
 - 实现[URP下的高质量单独投影](https://zhuanlan.zhihu.com/p/501739296)
+- 研究OpenGL中的[Normal Matrix](http://www.lighthouse3d.com/tutorials/glsl-12-tutorial/the-normal-matrix/)
 - Unity中的反走样AA总结
 - ***Graphics***板块中的《SSAO的实现》
 - Unity中的SRP Batcher总结
