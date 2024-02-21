@@ -23,3 +23,4 @@ title: LearnOpenGL
 
 - [**Colors**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/Colors)
 - [**Basic Lighting**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/BasicLighting)
+- [**Materials**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/Materials)
