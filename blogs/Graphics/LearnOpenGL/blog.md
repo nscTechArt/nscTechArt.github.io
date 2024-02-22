@@ -26,3 +26,4 @@ title: LearnOpenGL
 - [**Materials**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/Materials)
 - [**Lighting Maps**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/LightingMaps)
 - [**Light Casters**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/LightCasters)
+- [**Multiple Lights**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/MultipleLights)

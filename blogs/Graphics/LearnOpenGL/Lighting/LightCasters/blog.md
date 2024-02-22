@@ -161,4 +161,4 @@ else  // else, use ambient light so scene isn't completely dark outside the spot
 
 为了创建一个软边缘，我们需要为聚光灯模拟出一个inner锥体和outer锥体，我们可以前面实现的聚光灯直接作为inner锥体，将边缘的软化放在outer锥体中。
 
-为了模拟outer锥体
+为了模拟outer锥体，我们额外定义一个余弦值，用来表示聚光灯方向与outer锥体向量之间的夹角。那么，在内锥体和外锥体之间的片段，就应该再用一个0~1的值运算
