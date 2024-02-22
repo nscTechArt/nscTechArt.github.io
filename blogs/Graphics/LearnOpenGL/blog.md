@@ -27,3 +27,7 @@ title: LearnOpenGL
 - [**Lighting Maps**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/LightingMaps)
 - [**Light Casters**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/LightCasters)
 - [**Multiple Lights**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/Lighting/MultipleLights)
+
+#### Model Loading
+
+- [**Model Loading**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/ModelLoading)
