@@ -35,3 +35,4 @@ title: LearnOpenGL
 #### Advanced OpenGL
 
 - [**Depth Testing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/DepthTesting)
+- [**Stencil Testing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/StencilTesting)
