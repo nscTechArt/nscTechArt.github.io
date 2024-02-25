@@ -36,3 +36,5 @@ title: LearnOpenGL
 
 - [**Depth Testing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/DepthTesting)
 - [**Stencil Testing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/StencilTesting)
+- [**Blending**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/Blending)
+- [**Face Culling**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/FaceCulling)
