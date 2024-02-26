@@ -40,3 +40,6 @@ title: LearnOpenGL
 - [**Face Culling**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/FaceCulling)
 - [**Frame Buffers**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/FrameBuffers)
 - [**Cubemaps**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/Cubemaps)
+- [**Advanced Data**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/AdvancedData)
+- [**Advanced GLSL**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/AdvancedGLSL)
+
