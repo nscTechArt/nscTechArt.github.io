@@ -61,7 +61,7 @@ glBindFramebuffer(GL_FRAMEBUFFER, 0);
 glDeleteFramebuffers(1, &fbo);
 ```
 
-在执行完整性检查之前，我们需要将一个或多个附件绑定到帧缓冲上。附件就是一个可作为帧缓冲器缓冲的内存位置，可以将它想象成一张图像。在创建附件时，我们有两种选择：纹理或渲染缓冲对象
+在执行完整性检查之前，我们需要将一个或多个附件绑定到帧缓冲上。附件就是一个可作为帧缓冲器缓冲的内存位置，可以将它想象成一张图像。在创建附件时，我们有两种选择：纹理(texture)或渲染缓冲对象(render buffer object)
 
 ---
 
@@ -114,3 +114,283 @@ glTexture2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_STENCIL
 glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texture, 0);
 ```
 
+---
+
+除了纹理，renderbuffer object也是OpenGL中可以用作frame buffer object的一种类型。与纹理不同的是，renderbuffer不能被直接读取，它将所有渲染信息存储在buffer中，能够以更快的速度写入。如果想要读取renderbuffer object，需要借助`glReadPixels`，这个函数会从当前绑定的framebuffer中返回一个特定区域的像素集合，并非从attachment本身返回结果。
+
+renderbuffer的存储形式意味着它可以通过调用`glfwSwapBuffers()`被快速地写入数据、将数据写入其他buffer。
+
+创建render buffer object的方法我们应该比较熟悉了：
+
+```c++
+Unsigned int rbo;
+glGenRenderBuffers(1, &rbo);
+```
+
+同样需要绑定给render buffer object对应的OpenGL类型`GL_RENDERBUFFER`
+
+```c++
+glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+```
+
+因为renderbuffer是write-only的，我们通常将它作为depth和stencil attachment，因为大多情况下，我们并不需要读取depth和stencil，但是我们需要depth value和stencil value来实现深度测试和模板测试。
+
+我们可以使用glRenderbufferStorage函数来创建一个深度与模板renderbuffer object：
+
+```c++
+glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
+```
+
+最后，我们还需要将renderbuffer真正地绑定给framebuffer：
+
+```c++
+glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+```
+
+---
+
+现在我们应该对framebuffer有了一定的了解了，让我们来上手实操一下。我们将要把场景绘制到一个绑定在framebuffer的color texture中，然后再将color texture绘制到一个与屏幕相同宽高的四边形中。也就说，虽然我们使用了framebuffer，但是最后的视觉输出是没有任何变化的，我们将在后面的博客中解释这种做法的用途。
+
+首先，让我们将framebuffer创建出来：
+
+```c++
+unsigned int framebuffer;
+glGenFramebuffers(1, &framebuffer);
+glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+```
+
+然后我们要创建一个texture，并将它作为color attachment绑定给framebuffer。纹理的分辨率设置为屏幕一样，并且我们暂时不对它进行初始化：
+
+```c++
+// generate texture
+unsigned int textureColorbuffer;
+glGenTextures(1, &textureColorBuffer);
+glBindTexture(GL_TEXTURE_2D, textureColorBuffer);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+glBindTexture(GL_TEXTURE_2D, 0);
+
+// attach it to currently bound framebuffer object
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+```
+
+我们还需要让OpenGL支持深度测试与模板测试，也就是说，我们需要将一个renderbuffer绑定给framebuffer：
+
+```c++
+unsigned int rbo;
+glGenRenderbuffers(1, &rbo);
+glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+glRenderbuffersStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
+glBindRenderbuffer(GL_RENDERBUFFER, 0);
+```
+
+我们还需要将创建好的renderbuffer绑定为framebuffer的depth/stencil attachment：
+
+```c++
+glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+```
+
+最后，我们检查framebuffer是否complete，如果没有，我们最好输出报错信息：
+
+```c++
+if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+{
+	cout << "ERROR::FRAMEBUFFER::Framebuffer is not complete!\n";
+}
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+```
+
+现在，我们需要确认一下将场景绘制到一个texture中所需要的步骤：
+
+- 绑定framebuffer，从而将其激活为当前的framebuffer
+- 绘制场景
+- 绑定回默认framebuffer
+- 绘制一个全屏幕的quad，用自定义的framebbuffer的color buffer作为quad的纹理
+
+绘制一个全屏幕的quad，我们需要实现一套新的shader，我们不再需要使用复杂的矩阵变化吗，因为我们可以直接使用NDC作为顶点着色器的输出，而不做任何变换：
+
+```glsl
+#version 330 core
+layout (location = 0) in vec2 aPos;
+layout (location = 1) in vec2 aTexCoord;
+
+out vec2 TexCoords;
+
+void main()
+{
+    gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);
+    TexCoords = aTexCoords;
+}
+```
+
+片段着色器也相对比较简单，只需要采样纹理并输出即可：
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D screenTexture;
+
+void main()
+{
+    FragColor = texture(sreenTexture, TexCoords);
+}
+```
+
+我们的博客就暂时忽略screen quad VAO的创建，直接看看大致的后续代码：
+
+```c++
+// first pass
+glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);
+glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we are not using stencil buffer now
+glEnable(GL_DEPTH_TEST);
+DrawScene();
+
+// second pass
+glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default frame buffer
+glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT);
+
+screenShader.use();
+glBindVertexArray(quadVAO);
+glDisable(GL_DEPTH_TEST);
+glBindTexture(GL_TEXTURE_2D, textureColorBuffer);
+glDrawArrays(GL_TRIANGLES, 0, 6);
+```
+
+我们来简单地回顾一下上面的代码。当我们绘制screen quad时，需要关闭深度测试，因为我们需要这个quad绘制在所有东西的最上面，当正常绘制时，我们需要再次开启深度测试。
+
+得到的结果是这样的![](files/framebuffers_screen_texture.png)
+
+源码可以在[这里](https://learnopengl.com/code_viewer_gh.php?code=src/4.advanced_opengl/5.1.framebuffers/framebuffers.cpp)查阅
+
+---
+
+现在，我们就可以动手实现各种后处理效果了。
+
+**反相**
+
+```glsl
+void main()
+{
+    vec4 color = texture(screenTexture, TexCoords);
+
+    // inversion
+    FragColor = vec4(vec3(1 - color.rgb), 1.0);
+}
+```
+
+![](files/framebuffers_inverse.png)
+
+**GrayScale**
+
+```glsl
+void main()
+{
+    FragColor = texture(screenTexture, TexCoords);
+    float average = 0.2126 * FragColor.r + 0.7152 * FragColor.g + 0.0722 * FragColor.b;
+    FragColor = vec4(average, average, average, 1.0);
+}   
+```
+
+![](files/framebuffers_grayscale.png)
+
+**Kernel Effects**
+
+对单个纹理图像进行后处理的另一优点是，我们可以从纹理的其他部分采样颜色值，而不仅仅是该片段特定的颜色。例如，我们可以选择当前纹理坐标周围的一小块区域，并在当前纹理值周围采样多个纹理值。然后，我们可以以创造性的方式组合它们，从而创建出有趣的效果
+
+kernel（或卷积矩阵）是一个以当前像素为中心的小矩阵形式的值数组，它将周围像素值乘以其kernel值，然后将它们全部加在一起形成单一的值。我们在当前像素周围的方向上给纹理坐标添加了一个小的偏移，并根据kernel组合结果。下面给出了一个kernel的例子：
+$$
+\left\{
+\begin{matrix}
+    2 & 2 & 2 \\
+    2 & -15 & 2 \\
+    2 & 2 & 2
+\end{matrix}
+\right\}
+$$
+这个kernel取8个周围的像素值，将它们乘以2，然后将当前像素乘以-15。这个示例中，kernel通过在内核中确定的几个权重将周围的像素乘以这些权重，然后通过将当前像素乘以一个大的负权重来平衡结果
+
+我们看看在shader中怎样实现kernel：
+
+```glsl
+const float offset = 1.0 / 300.0;
+
+void main()
+{
+    vec2 offsets[9] = vec2[](
+        vec2(-offset,  offset), // top-left
+        vec2( 0.0f,    offset), // top-center
+        vec2( offset,  offset), // top-right
+        vec2(-offset,  0.0f),   // center-left
+        vec2( 0.0f,    0.0f),   // center-center
+        vec2( offset,  0.0f),   // center-right
+        vec2(-offset, -offset), // bottom-left
+        vec2( 0.0f,   -offset), // bottom-center
+        vec2( offset, -offset)  // bottom-right    
+    );
+
+    float kernel[9] = float[](
+        -1, -1, -1,
+        -1,  9, -1,
+        -1, -1, -1
+    );
+    
+    vec3 sampleTex[9];
+    for(int i = 0; i < 9; i++)
+    {
+        sampleTex[i] = vec3(texture(screenTexture, TexCoords.st + offsets[i]));
+    }
+    vec3 col = vec3(0.0);
+    for(int i = 0; i < 9; i++)
+        col += sampleTex[i] * kernel[i];
+    
+    FragColor = vec4(col, 1.0);
+}  
+```
+
+这个kernel的效果是这样的：
+
+![](files/framebuffers_sharpen.png)
+
+**Blur**
+
+模糊使用了一个不同的kernel
+
+```glsl
+float blurKernel[9] = float[]
+(
+    1.0 / 16, 2.0 / 16, 1.0 / 16,
+    2.0 / 16, 4.0 / 16, 2.0 / 16,
+    1.0 / 16, 2.0 / 16, 1.0 / 16
+);
+col = vec3(0.0);
+for(int i = 0; i < 9; i++)
+    col += sampleTex[i] * blurKernel[i];
+
+FragColor = vec4(col, 1.0);
+```
+
+![](files/framebuffers_blur.png)
+
+**边缘检测**
+
+```glsl
+float edgeDetactionKernel[9] = float[]
+(
+    1.0, 1.0, 1.0,
+    1.0, -8.0, 1.0,
+    1.0, 1.0, 1.0
+);
+col = vec3(0.0);
+for(int i = 0; i < 9; i++)
+col += sampleTex[i] * edgeDetactionKernel[i];
+
+FragColor = vec4(col, 1.0);
+```
+
+![](files/framebuffers_edge_detection.png)
