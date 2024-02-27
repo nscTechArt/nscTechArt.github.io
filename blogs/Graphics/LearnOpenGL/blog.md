@@ -48,3 +48,4 @@ title: LearnOpenGL
 #### Advanced Lighting
 
 - [**Advanced Lighting**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/AdvancedLighting)
+- [**GammaCorrection**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/GammaCorrection)
