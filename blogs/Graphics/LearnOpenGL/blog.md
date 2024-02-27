@@ -45,3 +45,6 @@ title: LearnOpenGL
 - [**Instancing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/Instancing)
 - [**Anti Aliasing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/AntiAliasing)
 
+#### Advanced Lighting
+
+- [**Advanced Lighting**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/AdvancedLighting)
