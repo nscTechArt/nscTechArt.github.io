@@ -43,4 +43,5 @@ title: LearnOpenGL
 - [**Advanced Data**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/AdvancedData)
 - [**Advanced GLSL**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/AdvancedGLSL)
 - [**Instancing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/Instancing)
+- [**Anti Aliasing**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedOpenGL/AntiAliasing)
 
