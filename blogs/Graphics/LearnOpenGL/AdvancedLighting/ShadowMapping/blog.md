@@ -171,6 +171,119 @@ void main()
 
 现在，我们已经生成了depth map，就可以开始绘制真正的阴影了。我们需要在片段着色器中判断当前片段是否在阴影之中，但是需要在顶点着色器里提前实现好到光源空间的变换：
 
+```glsl
+// vertex shader
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoords;
+
+out VS_OUT
+{
+	vec3 FragPos;
+	vec2 Normal;
+	vec2 TexCoords;
+	vec4 FragPosLightSpace;
+} vs_out;
+
+uniform mat4 projection;
+uniform mat4 view;
+uniform mat4 model;
+uniform mat4 lightSpaceMatrix;
+
+void main()
+{
+	vs_out.FragPos = vec3(model * vec4(aPos, 1.0));
+	vs_out.Normal = transpose(inverse(mat3(model))) * aNormal;
+	vs_out.TexCoords = aTexCoords;
+	vs_out.FragPosLightSpace = lightSpaceMatrix * vec4(vs_out.FragPos, 1.0);
+	gl_Position = projection * view * vec4(vs_out.FragPos, 1.0);
+}
 ```
 
+对于片段着色器，我们将采用BlinnPhong模型，此外，我们还要计算一个shadow值，如果片段在阴影中，shadow为1，否则shadow为0。我们将BlinnPhong模型中的diffuse和specular值乘以shadow，但是我们也不希望阴影是全黑的，所以不把ambient考量进阴影的影响：
+
+```glsl
+// fragment shader
+#version 330 core
+out vec4 FragColor;
+
+out VS_OUT
+{
+	vec3 FragPos;
+	vec2 Normal;
+	vec2 TexCoords;
+	vec4 FragPosLightSpace;
+} fs_in;
+
+uniform sampler2D diffuseTexture;
+uniform sampler2D shadowMap;
+
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+
+float ShadowCalculation(vec4 fragPosLightSpace)
+{
+    [...]
+}
+
+void main()
+{           
+    vec3 color = texture(diffuseTexture, fs_in.TexCoords).rgb;
+    vec3 normal = normalize(fs_in.Normal);
+    vec3 lightColor = vec3(1.0);
+    // ambient
+    vec3 ambient = 0.15 * lightColor;
+    // diffuse
+    vec3 lightDir = normalize(lightPos - fs_in.FragPos);
+    float diff = max(dot(lightDir, normal), 0.0);
+    vec3 diffuse = diff * lightColor;
+    // specular
+    vec3 viewDir = normalize(viewPos - fs_in.FragPos);
+    float spec = 0.0;
+    vec3 halfwayDir = normalize(lightDir + viewDir);  
+    spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
+    vec3 specular = spec * lightColor;    
+    // calculate shadow
+    float shadow = ShadowCalculation(fs_in.FragPosLightSpace);       
+    vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;    
+    
+    FragColor = vec4(lighting, 1.0);
+}
 ```
+
+上面的片段着色器代码基本上是基于之前的BlinnPhong shader的，但是添加了阴影相关的计算，被封装在`ShadowCalculation`中。同时也新增了两个变量，`FragPosLightSpace`和`shadowmap`。
+
+想要判断一个片段是否在阴影中，是将裁剪空间中的片段的光源空间位置，变换到NDC下。在顶点着色器中，我们将裁剪空间下的顶点位置通过`gl_Position`输出，OpenGL会自动执行透视除法，用w分量除以x y z分量，从而将坐标的范围范围从[-w, w]映射到[-1, 1]内。但是同样在裁剪空间下的`FragPosLightSpace`并不是通过`gl_Position`传递给片段着色器的，所以我们需要自己来完成透视除法：
+
+```glsl
+float ShadowCalculation(vec4 fragPosLightSpace)
+{
+	// perform perspective divid
+	vec3 projCoords = fragPosLightSapce.xyz / fragPosLightSapce.w;
+	[...]
+}
+```
+
+经过处理，片段的light-space位置就会在[-1, 1]的范围内了。但是，考虑到depth/shadow map中记录的深度的范围是[0, 1]，如果我们要使用projCoords去采样depth/shadow map的话，需要将NDC坐标转换到[0, 1]的范围
+
+```glsl
+projCoords = projCoords * 0.5 + 0.5;
+```
+
+采样shadow map的结果，就是光源视角下，距离最近的深度值，然后当前片段的深度值也可以通过projCoords的z分量获取，这样我们就可以判断片段是否在阴影中了：
+
+```c++
+float closestDepth = texture(shadowMap, projCoords.xy).r;
+float currentDepth = projCoords.z;
+float shadow = currentDepth ? 1.0 : 0.0;
+```
+
+现在我们已经可以看到shadow mapping的效果了，尽管还有很多待提升的地方：
+
+![](files/shadow_mapping_depth_map_base.png)
+
+完整源码参考[这里](https://learnopengl.com/code_viewer_gh.php?code=src/5.advanced_lighting/3.1.2.shadow_mapping_base/3.1.2.shadow_mapping.fs)
+
+---
+
