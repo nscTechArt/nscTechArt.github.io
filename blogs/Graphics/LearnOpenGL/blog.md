@@ -51,3 +51,4 @@ title: LearnOpenGL
 - [**Gamma Correction**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/GammaCorrection)
 - [**Shadow Mapping**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/ShadowMapping)
 - [**Point Shadows**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/PointShadows)
+- [**Normal Mapping**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/NormalMapping)
