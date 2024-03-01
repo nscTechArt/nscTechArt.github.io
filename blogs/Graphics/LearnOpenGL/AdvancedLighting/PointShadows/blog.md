@@ -316,3 +316,72 @@ float bias = 0.05;
 float shadow = currentDepth - bias > cloestDepth ? 1.0 : 0.0;
 ```
 
+我们的得到的结果是这样的：![](files/point_shadows.png)
+
+---
+
+点光源的shadow mapping也同样可以使用PCF来提升阴影质量。我们修改平行光引用所使用的PCF，并添加第三个维度：
+
+```glsl
+float shadow = 0.0;
+float bias = 0.05;
+float samples = 4.0;
+float offset = 0.1;
+
+for (float x = -offset; x < offset; x += offset / (samplers * 0.5))
+{
+	for (float y = -offset; y < offset; y += offset / (samplers * 0.5))
+    {
+        for (float z = -offset; z < offset; z += offset / (samplers * 0.5))
+        {
+			float closestDepth = texture(depthMap, fragToLight + vec3(x, y, z)).r;
+			closestDepth *= far_plane;
+			if (currentDepth - bias > closestDepth)
+				shadow += 1.0;
+        }
+    }
+}
+shadow /= (samples * samples * samples);
+```
+
+可以看到，阴影质量已经有了明显的提升：
+
+![](files/point_shadows_soft.png)
+
+只是，当`samples`设置4.0时，每个片段都需要64次采样，我们需要衡量性能的负担。试想一下，因为采样点与方向向量都比较接进，可能64份采样中，大多数都是重复的。我们可以使用的一个技巧是取一个偏移方向的数组，这些方向都是大致可分离的，例如，每个方向都指向完全不同的方向。这将大大减少靠近的子方向的数量。下面我们有一个最多 20 个偏移方向的数组：
+
+```glsl
+vec3 sampleOffsetDirections[20] = vec3[]
+(
+   vec3( 1,  1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1,  1,  1), 
+   vec3( 1,  1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1,  1, -1),
+   vec3( 1,  1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1,  1,  0),
+   vec3( 1,  0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1,  0, -1),
+   vec3( 0,  1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0,  1, -1)
+);   
+```
+
+修改PCF的算法：
+
+```glsl
+float shadow = 0.0;
+float bias   = 0.15;
+int samples  = 20;
+float viewDistance = length(viewPos - fragPos);
+float diskRadius = 0.05;
+for(int i = 0; i < samples; ++i)
+{
+    float closestDepth = texture(depthMap, fragToLight + sampleOffsetDirections[i] * diskRadius).r;
+    closestDepth *= far_plane;   // undo mapping [0;1]
+    if(currentDepth - bias > closestDepth)
+        shadow += 1.0;
+}
+shadow /= float(samples);  
+```
+
+我们引入了一个新的变量`diskRadius`，用来控制围绕方向向量`fragToLight`的偏移的倍率。我们还可以进一步优化，让diskRadius根据观察者与片段的距离而变化，从而使得距离观察者更远的阴影的软化效果更强：
+
+```
+float diskRadius = (1.0 + (viewDistance / far_plane)) / 25.0;
+```
+
