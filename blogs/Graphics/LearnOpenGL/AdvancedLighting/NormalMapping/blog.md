@@ -53,10 +53,80 @@ void main()
 
 ![](files/normal_mapping_surface_edges.png)
 
-[...]
+**[...]**
 
-如果您不完全理解这背后的数学原理，请不要担心。只要您了解我们可以从三角形的顶点及其纹理坐标计算切线和双切线（因为纹理坐标与切线向量位于同一空间中），您就成功了一半。
+只要您了解我们可以从三角形的顶点及其纹理坐标计算切线和双切线（因为纹理坐标与切线向量位于同一空间中），您就成功了一半。
 
 ---
 
-现在让我们动手实现tangent和bitangent的计算，我们
+现在让我们动手实现tangent和bitangent的计算，先来看看平面的vertex data（其中1 2 3和1 3 4分别组成了两个三角形）
+
+```c++
+// positions
+glm::vec3 pos1(-1.0,  1.0, 0.0);
+glm::vec3 pos2(-1.0, -1.0, 0.0);
+glm::vec3 pos3( 1.0, -1.0, 0.0);
+glm::vec3 pos4( 1.0,  1.0, 0.0);
+// texture coordinates
+glm::vec2 uv1(0.0, 1.0);
+glm::vec2 uv2(0.0, 0.0);
+glm::vec2 uv3(1.0, 0.0);
+glm::vec2 uv4(1.0, 1.0);
+// normal vector
+glm::vec3 nm(0.0, 0.0, 1.0);  
+```
+
+首先我们计算第一个三角形的edge和delta UV：
+
+```c++
+glm::vec3 edge1 = pos2 - pos1;
+glm::vec3 edge2 = pos3 - pos1;
+glm::vec2 deltaUV1 = uv2 - uv1;
+glm::vec2 deltaUV2 = uv3 - uv1;  
+```
+
+现在我们可以按照前面推导出的等式来计算tangent和bitangent了：
+
+```c++
+float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+tangent1.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+tangent1.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+tangent1.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+bitangent1.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+bitangent1.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+bitangent1.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+  
+[...] // similar procedure for calculating tangent/bitangent for plane's second triangle
+```
+
+这样，我们就定义好了每个顶点的tangent和bitangent向量。
+
+---
+
+为了使用normal mapping，我们首先需要在shader中创建一个TBN矩阵。为此，我们将计算好的tangent和bitangent向量作为顶点属性传进vertex shader：
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoords;
+layout (location = 3) in vec3 aTangent;
+layout (location = 4) in vec3 aBitangent;
+```
+
+然后在vertex shader中main函数中，我们创建TBN矩阵：
+
+```glsl
+void main()
+{
+	[...]
+	Vec3 T = normalize(vec3(model * vec4(aTangent, 0.0)));
+    Vec3 B = normalize(vec3(model * vec4(aBitangent, 0.0)));
+    Vec3 N = normalize(vec3(model * vec4(aNormal, 0.0)));
+    mat3 TBN = mat3(T, B, N);
+}
+```
+
+> 从数学的角度来看，我们没必要在vertex shader中定义bitangent，因为T、B、N三者是相互垂直的，我们可以通过cross product来获取B
