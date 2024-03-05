@@ -53,3 +53,5 @@ title: LearnOpenGL
 - [**Point Shadows**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/PointShadows)
 - [**Normal Mapping**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/NormalMapping)
 - [**Parallax Mapping**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/ParallaxMapping)
+- [**HDR**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/HDR)
+- [**Bloom**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/AdvancedLighting/Bloom)
