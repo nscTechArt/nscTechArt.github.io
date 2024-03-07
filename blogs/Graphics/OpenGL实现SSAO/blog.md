@@ -126,3 +126,233 @@ ssaoKernel.push_back(sample);
 
 ---
 
+首先，我们创建一个4x4的数组来包含随机旋转值，请留意，这些代表旋转的向量是朝向切线空间中法线方向的：
+
+```c++
+std::vector<glm::vec3> ssaoNoise;
+for (unsigned int i = 0; i < 16; i++)
+{
+	glm::vec3 noise
+	(
+		randomFloats(generator) * 2.0 - 1.0,
+		randomFloats(generator) * 2.0 - 1.0,
+		0.0f
+	);
+	ssaoNoise.push_back(noise);
+}
+```
+
+我们将随机的旋转值存储在一个4x4大小的纹理之中，并确保我们将wrapping mode设置为`GL_REPEAT`
+
+```c++
+unsigned int noiseTexture;
+glGenTextures(1, &noiseTexture);
+glBindTexture(GL_TEXTURE_2D, noiseTexture);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 4, 4, 0, GL_RGB, GL_FLOAT, &ssaoNoise[0]);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);  
+```
+
+这样一来，我们就准备好了SSAO需要的所有输入信息了
+
+---
+
+SSAO的shader是为了绘制一个screen-quad，为这个quad的每一个片段计算遮蔽值。因为我们要存储SSAO的结果，并用在后续的lighting pass中，所以我们还需要创建一个新的frame buffer object：
+
+```c++
+unsigned int ssaoFBO;
+glGenFramebuffer(1, &ssaoFBO);
+glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+
+unsigned int ssaoColorBuffer;
+glGenTextures(1, &ssaoColorBuffer);
+glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, SCR_WIDTH, SCR_HEIGHT, 0, GL_RED, GL_FLOAT, NULL);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+```
+
+因为环境光遮蔽的结果是一个单纯的灰度值，我们需要将其存储在纹理的r通道即可。
+
+绘制SSAO的伪代码是这样的：
+
+```c++
+// geometry pass: render stuff into G-buffer
+glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+[...]
+glBindFramebuffer(GL_FRAMEBUFFER, 0);  
+
+// use G-buffer to render SSAO texture
+glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+glClear(GL_COLOR_BUFFER_BIT);    
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D, gPosition);
+glActiveTexture(GL_TEXTURE1);
+glBindTexture(GL_TEXTURE_2D, gNormal);
+glActiveTexture(GL_TEXTURE2);
+glBindTexture(GL_TEXTURE_2D, noiseTexture);
+shaderSSAO.use();
+SendKernelSamplesToShader();
+shaderSSAO.setMat4("projection", projection);
+RenderQuad();
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+// lighting pass: render scene lighting
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+shaderLightingPass.use();
+[...]
+glActiveTexture(GL_TEXTURE3);
+glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
+[...]
+RenderQuad();  
+```
+
+我们需要将相关的G-buffer纹理、噪声纹理、kernel samples传递给SSAO的fragment shader：
+
+```glsl
+#version 330 core
+out float FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D gPosition;
+uniform sampler2D gNormal;
+uniform sampler2D texNoise;
+
+uniform vec3 sampler[64];
+uniform mat4 projection;
+
+// tile noise texture over screen, based on screen dimensions divided by noise size
+const vec2 noiseScale = vec2(800.0 / 4.0, 600.0 / 4.0);
+
+void main()
+{
+	[...]
+}
+```
+
+我们希望噪声纹理能够平铺整个屏幕，但是screen quad的`TexCoords`的范围在[0, 1]，是不足以平铺的。所以我们计算出`noiseScale`这个变量。
+
+接下来对纹理进行采样：
+
+```glsl
+vec3 fragPos   = texture(gPosition, TexCoords).xyz;
+vec3 normal    = texture(gNormal, TexCoords).rgb;
+vec3 randomVec = texture(texNoise, TexCoords * noiseScale).xyz;  
+```
+
+前面我们提到过，我们要在观察空间下进行SSAO的计算，但是我们获得的变量都是在切线空间下的，我们需要创建一个TBN矩阵：
+
+```
+vec3 tangent = normalize(randomVec - normal * dot (randomVec, normal));
+vec3 bitangent = cross(normal, tangent);
+mat3 TBN = mat3(tangent, bitangent, normal);
+```
+
+现在，我们可以对每一个kernel sample循环了，将sample从切线空间转换到观察空间，将它与当前片段的位置相加，将片段的深度值与depth buffer中的值比较。我们一步步分析完成这些工作的代码：
+
+```glsl
+float occlusion = 0.0;
+for (int i = 0; i < kernelSize; i++)
+{
+	// get sampler position
+	vec3 samplePos = TBN * sample[i]; // from tangent to view-space
+	samplePos = fragPos + samplePos * radius;
+	
+	[...]
+}
+```
+
+接下来我们将sample变换到屏幕空间，然后我们就可以获取sample对应的position/depth值了：
+
+```glsl
+vec4 offset = vec4(samplePos, 1.0);
+offset = projection * offset; // from view to clip space
+offset.xyz /= offset.w;
+offset.xyz = offset.xyz * 0.5 + 0.5;
+```
+
+我们用offset采样给Position：
+
+```glsl
+float sampleDepth = texture(gPosition, offset.xy).z; 
+```
+
+我们将得到的采样值与存储的深度值比较：
+
+```glsl
+occlusion += (samplerDepth >= samplePos.z + bias ? 1.0 : 0.0);
+```
+
+我们添加了一个bias来帮助消除SSAO中的acne
+
+我们还并没有完成SSAO的算法，仍有一些小问题我们没有解决。当一个片段处于表面的边缘时，算法会将片段后面的表面的深度值纳入计算，从而会导致错误的AO贡献值，所以我们要引入range check这个概念。下图为我们展示了引入range check后解决的问题，主要体现在佛像的边缘：
+
+![](files/ssao_range_check.png)
+
+我们引入range check的目的是，只有当一个片的深度值在sample radius的范围内时，才会对AO有贡献值，代码上我们这样修改：
+
+```glsl
+float rangeCheck = smoothstep(0.0, 1.0, radius / abs(fragPos.z - sampleDepth));
+occlusion += (sampleDepth >= samplePos.z + bias ? 1.0 : 0.0) * rangeCheck;
+```
+
+最后一步，我们要根据kernel size取平均值，并且提前计算`oneMinus`，后续我们在lighting pass中就可以直接乘上ambient了
+
+```
+occlusion = 1.0 - (occlusion / kernelSize);
+FragColor = occlusion;
+```
+
+我们现在已经能得到SSAO的效果了：
+
+![](files/ssao_without_blur.png)
+
+只是噪点纹理的重复模式清晰可见。为了创建平滑的SSAO结果，我们需要模糊环境光遮蔽纹理
+
+---
+
+在SSAO pass和lighting pass之间，我们要模糊SSAO的纹理，让我们创建一个新的framebuffer object：
+
+```c++
+unsigned int ssaoBlurFBO, ssaoColorBufferBlur;
+glGenFramebuffers(1, &ssaoBlurFBO);
+glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
+glGenTextures(1, &ssaoColorBufferBlur);
+glBindTexture(GL_TEXTURE_2D, ssaoColorBufferBlur);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, SCR_WIDTH, SCR_HEIGHT, 0, GL_RED, GL_FLOAT, NULL);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ssaoColorBufferBlur, 0);
+```
+
+blur shader也比较简单：
+
+```glsl
+#version 330 core
+out float FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D ssaoInput;
+
+void main() {
+    vec2 texelSize = 1.0 / vec2(textureSize(ssaoInput, 0));
+    float result = 0.0;
+    for (int x = -2; x < 2; ++x) 
+    {
+        for (int y = -2; y < 2; ++y) 
+        {
+            vec2 offset = vec2(float(x), float(y)) * texelSize;
+            result += texture(ssaoInput, TexCoords + offset).r;
+        }
+    }
+    FragColor = result / (4.0 * 4.0);
+}  
+```
+
+---
+
+最后lighting pass就不再赘述了，很简单
