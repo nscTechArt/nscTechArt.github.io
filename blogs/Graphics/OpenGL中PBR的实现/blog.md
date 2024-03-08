@@ -7,3 +7,6 @@ title: OpenGL中PBR的实现
 ### OpenGL中PBR的实现
 
 ---
+
+- [**PBR的理论基础**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL/OpenGL中PBR的实现/Theory)
+
