@@ -6,6 +6,8 @@ title: SRP中的平行光阴影 上篇
 
 ### SRP中的平行光阴影 上篇
 
+---
+
 这篇博客主要翻译自[Catlike的博客](https://catlikecoding.com/unity/tutorials/custom-srp/directional-shadows/)，我想试着从管线和Shader的角度全面地剖析Unity中阴影是如何绘制出来的。请注意，我们将直接考虑级联形式的阴影的实现。
 
 本篇博客中的代码不能保证正确，可能一个手抖就写错了，所以请参照原链接。
@@ -234,7 +236,11 @@ public void Render()
 
 private void RenderDirectionalShadows() {}
 ```
-阴影渲染的逻辑从创建shadow map开始，也就是把投影的物体绘制到一张纹理中，在级联阴影的前提下，我们把这个贴图命名为*_DirectionalShadowAtlas*，纹理的分辨率我们已经设置好了，余下的就是确认纹理的位深、格式、filterMode。**请注意，shadow map的纹理设置要考虑不同平台的要求。**<br>当然，既然我们创建了一个RenderTexture，也必然要考虑到RT的释放以及释放的时机。在我们的管线中，应该是在相机结束一次渲染时释放。<br>问题又来了，想CameraRenderer所写的释放RT的操作是不加逻辑判断的，所以我们必须考虑到如果场景没有阴影需要渲染，shadow map的RT没有创建的这种情况。同时，在一些较旧的图形API上，纹理和纹理采样器是绑定的，当shadow map RT没有被创建是，材质会使用默认贴图，也会使用shadow map的采样器，二者是不匹配的。为了避免以上种种情况，我们可以在不绘制阴影时创建一个dummy shadow map。
+阴影渲染的逻辑从创建shadow map开始，也就是把投影的物体绘制到一张纹理中，在级联阴影的前提下，我们把这个贴图命名为*_DirectionalShadowAtlas*，纹理的分辨率我们已经设置好了，余下的就是确认纹理的位深、格式、filterMode。**请注意，shadow map的纹理设置要考虑不同平台的要求。**
+
+当然，既然我们创建了一个RenderTexture，也必然要考虑到RT的释放以及释放的时机。在我们的管线中，应该是在相机结束一次渲染时释放。
+
+问题又来了，想CameraRenderer所写的释放RT的操作是不加逻辑判断的，所以我们必须考虑到如果场景没有阴影需要渲染，shadow map的RT没有创建的这种情况。同时，在一些较旧的图形API上，纹理和纹理采样器是绑定的，当shadow map RT没有被创建是，材质会使用默认贴图，也会使用shadow map的采样器，二者是不匹配的。为了避免以上种种情况，我们可以在不绘制阴影时创建一个dummy shadow map。
 
 ```c#
 // Shadows Class
@@ -446,7 +452,7 @@ private void RenderDirectionalShadows(int index, int split, int tileSize)
 }
 ```
 
-<br>实际上我们还需要考虑到级联阴影的存在，也就是说，我们需要从世界空间转换到tile space，我们创建一个新的方法来实现这个功能，具体实现的细节在代码注释中说明。之前我们在`SetTileViewport`中计算了tile的偏移，现在让我们把偏移值返回出来。
+实际上我们还需要考虑到级联阴影的存在，也就是说，我们需要从世界空间转换到tile space，我们创建一个新的方法来实现这个功能，具体实现的细节在代码注释中说明。之前我们在`SetTileViewport`中计算了tile的偏移，现在让我们把偏移值返回出来。
 
 ```c#
 // Shadows Class
@@ -507,7 +513,7 @@ public Vector2 ReserveDirectionalShadows(...)
 }
 ```
 
-<br>现在我们获取了每个投影的平行光的shadowStrength和对应的tile索引，和灯光的颜色、方向一样，这两个也属于灯光的信息，所以我们在`Lighting`中一起传给Shader。Shader中也要在CBuffer中添加对应的全局变量，这里就先省略了。
+现在我们获取了每个投影的平行光的shadowStrength和对应的tile索引，和灯光的颜色、方向一样，这两个也属于灯光的信息，所以我们在`Lighting`中一起传给Shader。Shader中也要在CBuffer中添加对应的全局变量，这里就先省略了。
 
 ```c#
 // Lighting Class
@@ -530,7 +536,9 @@ private void SetupDirectionalLight (int index, ref VisibleLight visibleLight)
 
 ##### Shadows HLSL File
 
-因为在Shader中采样阴影也是庞杂的一部份，我们将相关代码独立出来，放在`Shadows.hlsl`中，并在`LitPass`中把这个hlsl文件包含在`Light.hlsl`之前。在这个文件里，我们定义最大投影平行光数量、阴影图集以及空间转换所使用的矩阵数组。<br>由于阴影图集并非常规的纹理，Unity提供了特别的宏、采样器已经采样方式。需要注意的是，`TEXTURE2D_SHADOW`和`TEXTURE2D`并没有什么区别，只是强调了采样的是ShadowMap而不是常规的贴图。
+因为在Shader中采样阴影也是庞杂的一部份，我们将相关代码独立出来，放在`Shadows.hlsl`中，并在`LitPass`中把这个hlsl文件包含在`Light.hlsl`之前。在这个文件里，我们定义最大投影平行光数量、阴影图集以及空间转换所使用的矩阵数组。
+
+由于阴影图集并非常规的纹理，Unity提供了特别的宏、采样器已经采样方式。需要注意的是，`TEXTURE2D_SHADOW`和`TEXTURE2D`并没有什么区别，只是强调了采样的是ShadowMap而不是常规的贴图。
 
 ```glsl
 // Shadows.hlsl
@@ -552,7 +560,13 @@ CBUFFER_END
 
 ##### Sampling Shadows
 
-前面提到过，采样贴图涉及到片段从世界空间到灯光空间中的转换，在`Surface.hlsl`中添加position，并在片段着色器中赋值，代码就不展示了。<br>采样shadows还需要知道每个平行光所对应的阴影信息，在管线中我们已经传进Shader里了，现在让我们在`Shadows.hlsl`中定义出来。<br>在Shader中过采样阴影图集得到的结果，可以视为一个范围[0,1]的参数，用来衡量光线到达物体表面的距离，如果一个片段被完全遮挡，这个参数就是0，没有遮挡便为1，中间值表示该片段被部分遮挡。<br>不同灯光可能有不同的阴影强度，我们应该在根据这个强度对采样的结果进行插值。如果阴影强度小于等于0，我们甚至都没有必要再为这个灯光进行采样，直接定义这个灯光带给片段的阴影衰减为1。基于以上的思考，我们将这两个方法定义出来。
+前面提到过，采样贴图涉及到片段从世界空间到灯光空间中的转换，在`Surface.hlsl`中添加position，并在片段着色器中赋值，代码就不展示了。
+
+采样shadows还需要知道每个平行光所对应的阴影信息，在管线中我们已经传进Shader里了，现在让我们在`Shadows.hlsl`中定义出来。
+
+在Shader中过采样阴影图集得到的结果，可以视为一个范围[0,1]的参数，用来衡量光线到达物体表面的距离，如果一个片段被完全遮挡，这个参数就是0，没有遮挡便为1，中间值表示该片段被部分遮挡。
+
+不同灯光可能有不同的阴影强度，我们应该在根据这个强度对采样的结果进行插值。如果阴影强度小于等于0，我们甚至都没有必要再为这个灯光进行采样，直接定义这个灯光带给片段的阴影衰减为1。基于以上的思考，我们将这两个方法定义出来。
 
 ```glsl
 // Shadows.hlsl
@@ -581,7 +595,11 @@ float GetDirectionalShadowAttenuation(DirectionalShadowData data, Surface surfac
 
 ##### Attenuating Light
 
-我们已经计算出了每个投影灯的衰减值Attenuation，但是我很长时间都没有认识到这个值的正确意义。我最开始以为是像点光源那样，亮度和阴影强度与距离光源的距离相关。**Attenuation的意义在于：被投影的片段的颜色会因为受到阴影而减弱。**<br>有了这样的理解，我们就可以分别计算每个平行光所带来的衰减值了。我们将衰减值作为Light结构体的一个属性，并添加一个方法用来获取我们在`Shadows.hlsl`中定义的单个灯光的`DirectionShadowData`。修改GetDirectionalLight()，从而返回出包含atteuation的灯光结构体。<br>另外，我们需要在`Lighting.hlsl`中传递`surfaceWS`，并将灯光阴影所带来的衰减值纳入着色计算。
+我们已经计算出了每个投影灯的衰减值Attenuation，但是我很长时间都没有认识到这个值的正确意义。我最开始以为是像点光源那样，亮度和阴影强度与距离光源的距离相关。**Attenuation的意义在于：被投影的片段的颜色会因为受到阴影而减弱。**
+
+有了这样的理解，我们就可以分别计算每个平行光所带来的衰减值了。我们将衰减值作为Light结构体的一个属性，并添加一个方法用来获取我们在`Shadows.hlsl`中定义的单个灯光的`DirectionShadowData`。修改`GetDirectionalLight()`，从而返回出包含atteuation的灯光结构体。
+
+另外，我们需要在`Lighting.hlsl`中传递`surfaceWS`，并将灯光阴影所带来的衰减值纳入着色计算。
 
 ```glsl
 // Light.hlsl 
@@ -630,6 +648,6 @@ float3 GetLighting (Surface surfaceWS, BRDF brdf)
 
 ```
 
-<br>进行到这一步，我们在max distance为10，shadow atlas分辨率为512的设置下获得的效果是这样的：<br>![](files/初步的阴影效果.png)
+进行到这一步，我们在max distance为10，shadow atlas分辨率为512的设置下获得的效果是这样的：![](files/初步的阴影效果.png)
 
-<br>阴影的效果实在太差，不该有阴影的地方也会被伪影覆盖，形成像素带pixelated bands。产生这样效果的原因是：shadow map的分辨率有限，让片段表面产生了自阴影。
+阴影的效果实在太差，不该有阴影的地方也会被伪影覆盖，形成像素带pixelated bands。产生这样效果的原因是：shadow map的分辨率有限，让片段表面产生了自阴影。
