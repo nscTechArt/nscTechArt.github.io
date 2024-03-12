@@ -175,7 +175,7 @@ private ShadowedDirectionalLight[] shadowedDirectionalLights =
 - 当前投影的灯光数量小于最大投影灯光数量
 - 灯光的投影模式不能为none
 - 灯光的阴影强度大于0
-- 灯光如果只影响在Max Shadow Distance之外的物体，那这个灯光就没有阴影需要渲染。这需要我们在cullingResults中调用`GetShadowCasterBounds`来检测，它需要我们提供当前的可见光的索引
+- 灯光如果只影响在Max Shadow Distance之外的物体，那这个灯光就没有阴影需要渲染。这需要我们在cullingResults中调用`GetShadowCasterBounds`来检测，它一个可见光的索引作为参数，如果这个灯光至少影响一个场景中投影的物体，这个函数就返回`true`
 
 ```c#
 // Shadows Class
@@ -538,7 +538,9 @@ private void SetupDirectionalLight (int index, ref VisibleLight visibleLight)
 
 因为在Shader中采样阴影也是庞杂的一部份，我们将相关代码独立出来，放在`Shadows.hlsl`中，并在`LitPass`中把这个hlsl文件包含在`Light.hlsl`之前。在这个文件里，我们定义最大投影平行光数量、阴影图集以及空间转换所使用的矩阵数组。
 
-由于阴影图集并非常规的纹理，Unity提供了特别的宏、采样器已经采样方式。需要注意的是，`TEXTURE2D_SHADOW`和`TEXTURE2D`并没有什么区别，只是强调了采样的是ShadowMap而不是常规的贴图。
+由于阴影图集并非常规的纹理，Unity提供了特别的宏、采样器以及采样方式。需要注意的是，`TEXTURE2D_SHADOW`和`TEXTURE2D`并没有什么区别，只是强调了采样的是ShadowMap而不是常规的贴图。
+
+但是不同于`SAMPLER`定义的是一个SamplerState，`SAMPLER_CMP`定义的是SamplerComparisonState，因为我们为shadow map设定的filter mode是双线性过滤，但是这对于我们比较深度是没有意义的，使用`SAMPLER_CMP`则会在双线性插值之前进行深度的比较，从而得到一个更好的效果。
 
 ```glsl
 // Shadows.hlsl

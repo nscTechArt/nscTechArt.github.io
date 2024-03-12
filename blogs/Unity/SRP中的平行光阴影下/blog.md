@@ -99,9 +99,7 @@ private void RenderDirectionalShadows(int index, int split, int tileSize)
 
 ##### Culling Spheres
 
-Unity通过一个Culling Sphere来确定每个级联所覆盖的区域。剔除是球形的，但是阴影的投影是正交且正方形的，所以Culling Sphere还会包围投影周围的一些区域，这也是为什么一些因为在剔除区域以外也是可见的。
-
-CullingSphere是Unity为我们创建的，它被包含在`ComputeDirectionalShadowMatricesAndCullingPrimitives`的`ShadowSplitData`中。此外，平行光的照射角度与Culling Sphere并没有什么关系，所有平行光都会使用同一套CullingSpheres。所以我们只需要从splitData中获取一次就可以，因为级联对所有灯光都是等价的。
+Unity通过一个Culling Sphere来确定每个级联所覆盖的区域。剔除是球形的，但是阴影的投影是正交且正方形的，投影区域会与culling sphere紧密贴合，同时也会覆盖住culling sphere周围的一些空间，这也是为什么一些阴影在剔除区域以外也是可见的。此外，平行光的照射角度与Culling Sphere并没有什么关系，所有平行光都会使用同一套CullingSpheres。
 
 我们在Shader中判断使用哪个级联，所以就需要判断片段是否在球体中，方法是比较片段和cullingSphere中心的平方距离与cullingSphere的平方半径。我们应该在获取culling Sphere之后就计算出平方半径，这样就不用在Shader里再次计算了。
 
