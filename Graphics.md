@@ -8,6 +8,7 @@ title: Graphics
 
 ---
 
+- [**Mathematics for Computer Graphics**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL)
 - [**Learn OpenGL**](https://lovewithyou.tech/blogs/Graphics/LearnOpenGL)
 - [**OpenGL中PBR的实现**](https://lovewithyou.tech/blogs/Graphics/OpenGL中PBR的实现)
 - [**OpenGL实现SSAO**](https://lovewithyou.tech/blogs/Graphics/OpenGL实现SSAO)
