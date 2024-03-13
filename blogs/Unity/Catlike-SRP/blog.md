@@ -9,4 +9,5 @@ title: Catlike's SRP
 ---
 
 - [**SRP中的平行光阴影 小结**](https://lovewithyou.tech/blogs/Unity/Catlike-SRP/SRP中的平行光阴影小结)
+- [**Baked Light**](https://lovewithyou.tech/blogs/Unity/Catlike-SRP/BakedLight)
 

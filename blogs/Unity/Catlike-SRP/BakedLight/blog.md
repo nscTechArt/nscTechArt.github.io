@@ -275,3 +275,154 @@ return SampleSingleLightmap(
 
 ---
 
+#### 3 Light Probes
+
+场景中的动态物体并不会影响烘培GI，但是却可以通过光照探针受到GI的影响。光照探针是存在于场景中的一个点，它通过三阶多项式，尤其是L2球谐来烘培所有入射光。光照探针放置在场景周围，Unity 在每个对象之间进行插值，以得出其位置的最终光照近似值。
+
+##### 3.1 Light Probe Group
+
+如何在Unity的场景中创建光照探针就不说了。
+
+场景中可以存在多个光照探针组。Unity会将所有探针组合在一起，然后创建一个四面体体积网格来链接它们。每个动态物体都会在这个四面体内部。四面体四个顶点上的光照探针会通过插值的方式，最终得出应用在动态物体上的光照。如果一个物体最终超出了探针覆盖的区域，则使用最近的三角形，因此照明可能会显得很奇怪
+
+默认情况下，当选中一个动态物体时，Unity会为我们显示出影响该物体的探针和物体所在位置上的插值结果。
+
+![](files/20240313210520.png)
+
+摆放光照探针的位置取决于场景。首先，动态物体的目标位置需要有光照探针。其次，光照探针也需要在光照改变的地方拜访。每个探针都是插值的一个端点。第三，不要将光照探针放在烘焙的几何体内部，这样的话探针就会变成黑色的。最后，光照探针的原理是插值，如果光照在墙的两面不一样，那就将探针尽可能地靠近两面墙放置，这样就不会有物体用的是墙两侧的光照的插值结果。
+
+##### 3.2 Sampling Probes
+
+插值的光照探针数据也需要针对每个物体来传递给GPU，这一步需要像lightmap一样，告知Unity。
+
+```c#
+perObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe
+```
+
+对应的，`UnityPerDraw`需要包含七个`float4`向量，代表了多项式的红绿蓝分量，这些向量都是以`unity_SH*`命名，其中的`*`是A、B或C。
+
+```glsl
+CBUFFER_START(UnityPerDraw)
+	…
+
+	float4 unity_SHAr;
+	float4 unity_SHAg;
+	float4 unity_SHAb;
+	float4 unity_SHBr;
+	float4 unity_SHBg;
+	float4 unity_SHBb;
+	float4 unity_SHC;
+CBUFFER_END
+```
+
+我们创建一个新的函数`SampleLightProbe`，用来采样GI中的light probe。采样需要一个方向向量，所以我们传入世界空间下的surface结构体。
+
+如果当前的物体使用了light map，`SampleLightProbe`就返回0，否则返回0和`SampleSH9`的最大值。SampleSH9接受probe data和法线向量作为参数，其中probe data由一个系数数组提供。
+
+```
+float3 SampleLightProbe(Surface surfaceWS)
+{
+#if defined(LIGHTMAP_ON)
+	return 0.0;
+#else
+	float4 coefficients[7];
+    coefficients[0] = unity_SHAr;
+    coefficients[1] = unity_SHAg;
+    coefficients[2] = unity_SHAb;
+    coefficients[3] = unity_SHBr;
+    coefficients[4] = unity_SHBg;
+    coefficients[5] = unity_SHBb;
+    coefficients[6] = unity_SHC;
+    return max(0.0, SampleSH9(coefficients, surfaceWS.normal));
+#endif
+}
+```
+
+在`GetGI`中，我们需要传进surface，同时加入`SampleLightProbe`的计算结果
+
+```
+GI GetGI(float2 lightMapUV, Surface surfaceWS)
+{
+	GI gi;
+	gi.diffuse = SampleLightMap(lightMapUV) + SampleLightProbe(surfaceWS);
+	return gi;
+}
+```
+
+最后，修改`LitPassFragment`中`GetGI`的调用，我就不写了。得到的结果是这样的：
+
+![](files/20240313215137.png)
+
+##### 3.3 Light Probe Proxy Volumes
+
+对于较小的动态物体，光照探针的效果很好，因为光照探针的计算就是基于点的。但是对于一些较大的物体，效果可能会很差。比如，我们在场景中加入两个缩放的cube，因为它们所在的位置在一个较暗的区域内，然而采样就只是根据这个点而进行的，所以这两个cube整体都会很暗，显然效果是不对的。
+
+![](files/20240313215836.png)
+
+所以我们要使用light probe proxy volume，简称LPPV，使用方法是：给动态物体添加*LightProbeProxyVolume*组件，然后将*Light Prob*e模式设置为*Use Proxy Volume*，同时将`Resolusion Mode`设置为`Custom`
+
+![](files/20240313220355.png)
+
+##### 3.4 Sampling LPPVs
+
+LPPV也同样需要针对每个物体将数据传递给GPU，我们需要启用`PerObjectData.LightProbeProxyVolume`
+
+```c#
+perObjectData =
+    PerObjectData.Lightmaps | PerObjectData.LightProbe |
+    PerObjectData.LightProbeProxyVolume
+```
+
+对于UnityPerDraw，我们需要添加四个变量
+
+```glsl
+CBUFFER_START(UnityPerDraw)
+	…
+
+	float4 unity_ProbeVolumeParams;
+	float4x4 unity_ProbeVolumeWorldToObject;
+	float4 unity_ProbeVolumeSizeInv;
+	float4 unity_ProbeVolumeMin;
+CBUFFER_END
+```
+
+volume data存储在3D纹理`unity_ProbeVolumeSH`中，我们需要在GI.hlsl中声明纹理及其采样器。
+
+```glsl
+TEXTURE3D_FLOAT(unity_ProbeVolumeSH);
+SAMPLER(samplerunity_ProbeVolumeSH);
+```
+
+我们使用`unity_ProbeVolumeParams`的x分量来判断当前使用的是LPPV还是插值的光照探针，如果判断为前者，我们通过`SampleProbeVolumeSH4`来采样volume。
+
+```glsl
+    if (unity_ProbeVolumeParams.x) {
+        return SampleProbeVolumeSH4(
+            TEXTURE3D_ARGS(unity_ProbeVolumeSH, samplerunity_ProbeVolumeSH),
+            surfaceWS.position, surfaceWS.normal,
+            unity_ProbeVolumeWorldToObject,
+            unity_ProbeVolumeParams.y, unity_ProbeVolumeParams.z,
+            unity_ProbeVolumeMin.xyz, unity_ProbeVolumeSizeInv.xyz
+        );
+    }
+    else {
+        float4 coefficients[7];
+        coefficients[0] = unity_SHAr;
+        coefficients[1] = unity_SHAg;
+        coefficients[2] = unity_SHAb;
+        coefficients[3] = unity_SHBr;
+        coefficients[4] = unity_SHBg;
+        coefficients[5] = unity_SHBb;
+        coefficients[6] = unity_SHC;
+        return max(0.0, SampleSH9(coefficients, surfaceWS.normal));
+    }
+```
+
+可以看到修改的结果
+
+![](files/20240313221903.png)
+
+---
+
+#### 4 Meta Pass
+
