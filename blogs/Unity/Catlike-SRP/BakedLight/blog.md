@@ -426,3 +426,239 @@ SAMPLER(samplerunity_ProbeVolumeSH);
 
 #### 4 Meta Pass
 
+间接漫反射光照会在表面之间来回弹射，所以应该受到漫反射反射率的影响。当前我们并没有实现这一步，因为Unity会使用一个特殊的Meta Pass来解决烘焙时的反射光，我们当前还没有实现Meta Pass，所以Unity默认我们的表面都是全白的。
+
+##### 4.1 Unified Input
+
+添加一个新的Pass意味着我们要重新定义Shader属性，我们可以将`UnityPerMaterial`buffer以及base texture从LitPass中分离出来，放在一个新的文件*Shaders/LitInput.hlsl*中。另外，我们也会使用`TransformBaseUV` `GetBase` `GetCutoff` `GetMetallic` `GetSmoothness`函数来隐藏instancing相关的代码。
+
+```
+#ifndef CUSTOM_LIT_INPUT_INCLUDED
+#define CUSTOM_LIT_INPUT_INCLUDED
+
+TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
+
+UNITY_INSTANCING_BUFFER_START(UnityPerMaterial)
+	UNITY_DEFINE_INSTANCED_PROP(float4, _BaseMap_ST)
+	UNITY_DEFINE_INSTANCED_PROP(float4, _BaseColor)
+	UNITY_DEFINE_INSTANCED_PROP(float, _Cutoff)
+	UNITY_DEFINE_INSTANCED_PROP(float, _Metallic)
+	UNITY_DEFINE_INSTANCED_PROP(float, _Smoothness)
+UNITY_INSTANCING_BUFFER_END(UnityPerMaterial)
+
+```
+
+```glsl
+float2 TransformBaseUV (float2 baseUV) {
+	float4 baseST = UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _BaseMap_ST);
+	return baseUV * baseST.xy + baseST.zw;
+}
+
+float4 GetBase (float2 baseUV) {
+	float4 map = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, baseUV);
+	float4 color = UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _BaseColor);
+	return map * color;
+}
+
+float GetCutoff (float2 baseUV) {
+	return UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _Cutoff);
+}
+
+float GetMetallic (float2 baseUV) {
+	return UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _Metallic);
+}
+
+float GetSmoothness (float2 baseUV) {
+	return UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _Smoothness);
+}
+
+#endif
+```
+
+我们在SubShader的顶部，通过`HLSLINCLUDE`就能为每个Pass引用*LitInput.hlsl*
+
+```glsl
+SubShader {
+    HLSLINCLUDE
+    #include "../ShaderLibrary/Common.hlsl"
+    #include "LitInput.hlsl"
+    ENDHLSL
+
+    …
+}
+```
+
+我们需要删除掉LitPass中冗余的代码
+
+```glsl
+//#include "../ShaderLibrary/Common.hlsl"
+…
+
+//TEXTURE2D(_BaseMap);
+//SAMPLER(sampler_BaseMap);
+
+//UNITY_INSTANCING_BUFFER_START(UnityPerMaterial)
+	//…
+//UNITY_INSTANCING_BUFFER_END(UnityPerMaterial)
+```
+
+同时调整Shader属性的获取，这里就不写了，ShadowCasterPass也需要同样的操作。
+
+##### 4.2 Unlit
+
+比较简单，就不写了
+
+##### 4.3 Meta Light Mode
+
+在*Lit*和*Unlit* Shader中添加新的Pass，将其*LightMode*设置为*Meta*。Meta Pass需要culling始终为off，同时没有multi compile的指令。同时创建*MetaPass.hlsl*，我们将具体的实现放在这个文件中
+
+```glsl
+Pass
+{
+	Tags
+	{
+		"LightMode" = "Meta"
+	}
+	
+	Cull Off
+	
+	HLSLPROGRAM
+	#pragram target 3.5
+	#pragram vertex MetaPassVertex
+	#pragram fragment MetaPassFragment
+	#include "MetaPass.hlsl"
+	ENDHLSL
+}
+```
+
+我们将会需要获取表面的diffuse reflectivity，所以我们需要在`MetaPassFragment`中获取`BRDF`，同时我们还需要使用到`Surface`，`Shadows`，`Light`这些文件。我们只需要知道物体空间的信息和UV，并把clip space的位置设置为0。我们先将最终输出值设置为0
+
+```glsl
+#ifndef CUSTOM_META_PASS_INCLUDED
+#define CUSTOM_META_PASS_INCLUDED
+
+#include "../ShaderLibrary/Surface.hlsl"
+#include "../ShaderLibrary/Shadows.hlsl"
+#include "../ShaderLibrary/Light.hlsl"
+#include "../ShaderLibrary/BRDF.hlsl"
+
+struct Attributes {
+	float3 positionOS : POSITION;
+	float2 baseUV : TEXCOORD0;
+};
+
+struct Varyings {
+	float4 positionCS : SV_POSITION;
+	float2 baseUV : VAR_BASE_UV;
+};
+
+Varyings MetaPassVertex (Attributes input) {
+	Varyings output;
+	output.positionCS = 0.0;
+	output.baseUV = TransformBaseUV(input.baseUV);
+	return output;
+}
+
+float4 MetaPassFragment (Varyings input) : SV_TARGET {
+	float4 base = GetBase(input.baseUV);
+	Surface surface;
+	ZERO_INITIALIZE(Surface, surface);
+	surface.color = base.rgb;
+	surface.metallic = GetMetallic(input.baseUV);
+	surface.smoothness = GetSmoothness(input.baseUV);
+	BRDF brdf = GetBRDF(surface);
+	float4 meta = 0.0;
+	return meta;
+}
+
+#endif
+```
+
+完成MetaPass后，再次烘焙，我们会发现所有的间接光照消失了，因为黑色的表面什么都不会反射。
+
+![](files/20240313231918.png)
+
+##### 4.4 Light Map Coordinates
+
+我们要再次使用的光照贴图的UV坐标，但是不同的是，我们在顶点着色器中所使用的object space是基于`lightMapUV`的
+
+```glsl
+struct Attributes
+{
+	float3 positionOS : POSITION;
+	float2 baseUV : TEXCOORD0;
+	float2 lightMapUV : TEXCOORD1;
+};
+
+...
+
+Varyings MetaPassVertex (Attributes input)
+{
+	Varyings output;
+	input.positionOS.xy = input.lightMapUV * unity_lightMapST.xy + unity_lightmapST.zw;
+	output.positionCS = TransformWorldToHClip(input.positionOS);
+	output.baseUV = TransformBaseUV(input.baseUV);
+	return output;
+}
+```
+
+但是我们也并非完全不需要顶点本身的object space坐标，因为这可能会导致Shader失效，例如OpenGL明确地会使用到顶点本身的object space坐标的Z分量。我们参考Unity的代码，设置一个dummy assignment
+
+```glsl
+input.positionOS.xy = input.lightMapUV * unity_LightmapST.xy + unity_lightmapST.zw;
+input.positionOS.z = input.positionOS.z > 0.0 ? FLT_MIN : 0.0;
+```
+
+##### 4.5 Diffuse Reflectivity
+
+Meta Pass可以被用来生成不同的数据，具体生成的数据是通过bool4 `unity_MetaFragmentControl`来判断的。
+
+```glsl
+bool4 unity_MetaFragmentControl;
+```
+
+如果`unity_MetaFragmentControl`的X分量对应的flag被启用了，那就说明我们需要获取diffuse reflectivity
+
+```glsl
+float meta = 0.0;
+if (unity_MetaFragmentControl.x)
+{
+	meta = float4(brdf.diffuse, 1.0);
+}
+return meta;
+```
+
+这足以为反射光照提供颜色值了，但是Unity的Meta Pass还做了一些额外的工作，它会加上specular reflectivity与roughness的结果的一半的值，背后的原理是镜面反射强度高但粗糙的材质，也会传递一些间接光照。
+
+```glsl
+meta.rgb += brdf.specular * brdf.roughness * 0.5;
+```
+
+然后，还有一些运算
+
+```glsl
+meta.rgb = min(PositivePow(meta.rgb, unity_OneOverOutputBoost), unity_MaxOutputValue);
+```
+
+这样一来，我们就能得到有颜色的间接光照了，如图所示
+
+![](files/20240313234757.png)
+
+在之前，为了debug，让`LitPassFragment`的`GetLighting`只输出间接光照的结果，现在我们可以将surface的diffuse reflectivity加回来了。
+
+```glsl
+float3 color = gi.diffuse * brdf.diffuse;
+```
+
+![](files/20240313235112.png)
+
+开启环境反射
+
+![](files/20240313235202.png)
+
+最后，我们将平行光的模式设置为*Mixed*，也就是启用实时光照，然后烘焙间接光照，得到的结果如下
+
+![](files/20240313235325.png)
+
+---
+
