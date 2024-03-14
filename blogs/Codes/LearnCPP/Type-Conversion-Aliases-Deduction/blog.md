@@ -1,6 +1,6 @@
 ---
 layout: page
-permalink: /blogs/Codes/LearnCPP/Ch10/index.html
+permalink: /blogs/Codes/LearnCPP/Type-Conversion-Aliases-Deduction/index.html
 title:Type Conversion, Type Aliases, and Type Deduction
 ---
 
