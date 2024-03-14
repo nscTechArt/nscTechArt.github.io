@@ -8,5 +8,5 @@ title: Codes
 
 ---
 
-- [**Cherno的C++入门教程**](https://lovewithyou.tech/blogs/Codes/Cherno-CPP)
+- [**Learn C++**](https://lovewithyou.tech/blogs/Codes/LearnCPP)
 - [**C#中out和ref的使用**](https://lovewithyou.tech/blogs/Codes/CSharp中的out和ref)
