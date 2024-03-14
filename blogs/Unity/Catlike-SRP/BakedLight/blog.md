@@ -662,3 +662,212 @@ float3 color = gi.diffuse * brdf.diffuse;
 
 ---
 
+#### 5 Emissive Surfaces
+
+有些表面会自发光，这样即使没有光照，这些表面也是可见的。我们并不能将其视为光源，因为它不会影响其他表面，但是却可以贡献烘培光照。
+
+##### 5.1 Emitted Light
+
+我们添加两个新的Shader属性，自发光贴图和自发光颜色。
+
+```glsl
+[NoScaleOffset] _EmissionMap("Emission", 2D) = "white" {}
+[HDR] _EmissionColor("Emission", Color) = (0.0, 0.0, 0.0, 0.0)
+```
+
+修改*LitInput.hlsl*
+
+```glsl
+TEXTURE2D(_BaseMap);
+TEXTURE2D(_EmissionMap);
+SAMPLER(sampler_BaseMap);
+
+UNITY_INSTANCING_BUFFER_START(UnityPerMaterial)
+	UNITY_DEFINE_INSTANCED_PROP(float4, _BaseMap_ST)
+	UNITY_DEFINE_INSTANCED_PROP(float4, _BaseColor)
+	UNITY_DEFINE_INSTANCED_PROP(float4, _EmissionColor)
+	…
+UNITY_INSTANCING_BUFFER_END(UnityPerMaterial)
+
+…
+
+float3 GetEmission (float2 baseUV) {
+	float4 map = SAMPLE_TEXTURE2D(_EmissionMap, sampler_BaseMap, baseUV);
+	float4 color = UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _EmissionColor);
+	return map.rgb * color.rgb;
+}
+```
+
+在LitPassFragment中，添加自发光颜色
+
+```glsl
+float3 color = GetLighting(surface, brdf, gi);
+color += GetEmission(input.baseUV);
+return float4(color, surface.alpha);
+```
+
+在场景中添加一些自发光的cube，并设置为参与GI
+
+##### 5.2 Baked Emission
+
+自发光通过一个特殊的Pass进行烘培，当`unity_MetaFragmentControl`的y Flag启用时，`MetaPassFragment`就会输出自发光值
+
+```glsl
+if (unity_MetaFragmentControl.x) {
+    …
+}
+else if (unity_MetaFragmentControl.y) {
+    meta = float4(GetEmission(input.baseUV), 1.0);
+}
+```
+
+但是`unity_MetaFragmentControl`的y flag并非自动配置的，我们需要对每个材质开启自发光烘培。我们可以显示一个控制自发光开关的调试选项，需要我们在Editor调用LightmapEmissiononProperty
+
+```c#
+public override void OnGUI (
+    MaterialEditor materialEditor, MaterialProperty[] properties
+) {
+    EditorGUI.BeginChangeCheck();
+    base.OnGUI(materialEditor, properties);
+    editor = materialEditor;
+    materials = materialEditor.targets;
+    this.properties = properties;
+
+    BakedEmission();
+
+    …
+}
+
+void BakedEmission () {
+    editor.LightmapEmissionProperty();
+}
+```
+
+现在，材质面板会出现一个GI的下拉选项，默认是*None*。虽然这个按钮的名字是GI，但实际上只影响自发光的烘培，当选中Baked时，lightmapper就会为自发光运行一个单独的pass。还有一个*Realtime*的选项，不过已经是过时的了
+
+![](files/20240314150645.png)
+
+不过现在还是不能生效，因为Unity烘培时，会试着避免单独的自发光pass。如果一个材质的自发光被这是为0，这个材质的自发光烘焙就会被忽略。所以当emission mode改变时，我们需要为所有选中的材质关闭`globalIlluminationFlags`属性中默认的`MaterialGlobalIlluminationFlags.EmissiveIsBlack`。也就是说，只有当需要时才应该开启*Baked*
+
+```c#
+void BakedEmission () {
+    EditorGUI.BeginChangeCheck();
+    editor.LightmapEmissionProperty();
+    if (EditorGUI.EndChangeCheck()) {
+        foreach (Material m in editor.targets) {
+            m.globalIlluminationFlags &=
+                ~MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+        }
+    }
+}
+```
+
+![](files/20240314151654.png)
+
+---
+
+#### 6 Baked Transparency
+
+烘培半透明物体也是可行的，但是需要我们做一些额外的工作。
+
+##### 6.1 Hard-Coded Properties
+
+很遗憾的是，针对半透明Unity的lightmapper有一个硬编码的方法。它会根据材质的队列来判断材质是opaque，clip还是透明的。然后它会根据_MainTex和 _Color来决定透明度，根据*Cutoff*来判断裁剪值。我们的shader中已经有Cutoff了，但是前两个还没有。
+
+```glsl
+[HideInInspector] _MainTex("Texture for Lightmap", 2D) = "white" {}
+[HideInInspector] _Color("Color for Lightmap", Color) = (0.5, 0.5, 0.5, 1.0)
+```
+
+##### 6.2 Copying Properties
+
+我们现在需要做的是，确保*_Maintex* 与 *_Basemap*所包含的贴图数据一样，并且使用相同的UV，且两个颜色数据也要统一。我们可以在CustomShaderGUI.OnGUI中创建一个新的方法来完成这个工作
+
+```c#
+public override void OnGUI (
+    MaterialEditor materialEditor, MaterialProperty[] properties
+) {
+    …
+
+    if (EditorGUI.EndChangeCheck()) {
+        SetShadowCasterPass();
+        CopyLightMappingProperties();
+    }
+}
+
+void CopyLightMappingProperties () {
+    MaterialProperty mainTex = FindProperty("_MainTex", properties, false);
+    MaterialProperty baseMap = FindProperty("_BaseMap", properties, false);
+    if (mainTex != null && baseMap != null) {
+        mainTex.textureValue = baseMap.textureValue;
+        mainTex.textureScaleAndOffset = baseMap.textureScaleAndOffset;
+    }
+    MaterialProperty color = FindProperty("_Color", properties, false);
+    MaterialProperty baseColor =
+        FindProperty("_BaseColor", properties, false);
+    if (color != null && baseColor != null) {
+        color.colorValue = baseColor.colorValue;
+    }
+}
+```
+
+---
+
+#### 7 Mesh Ball
+
+最后，我们再来为实例化物体支持GI。这个实例化的物体是在场景运行时动态创建的，所以它们并不能被烘培。但是我们可以通过一些操作，使它们可以通过光照探针接受烘焙光照。
+
+##### 7.1 Light Probes
+
+想要使用光照探针，我们需要为DrawMeshInstanced新增五个参数
+
+```c#
+using UnityEngine;
+using UnityEngine.Rendering;
+
+public class MeshBall : MonoBehaviour {
+	
+	…
+	
+	void Update () {
+		if (block == null) {
+			block = new MaterialPropertyBlock();
+			block.SetVectorArray(baseColorId, baseColors);
+			block.SetFloatArray(metallicId, metallic);
+			block.SetFloatArray(smoothnessId, smoothness);
+		}
+		Graphics.DrawMeshInstanced(
+			mesh, 0, material, matrices, 1023, block,
+			ShadowCastingMode.On, true, 0, null, LightProbeUsage.CustomProvided
+		);
+	}
+```
+
+我们需要为实例化的物体手动地生成插值光照探针，然后将它们添加进material property block。也就是说，让配置material property block时，我们需要获取实例物体的位置。我们可以获取变换矩阵的最后一列，然后存储在一个临时数组中
+
+```c#
+		if (block == null) {
+			block = new MaterialPropertyBlock();
+			block.SetVectorArray(baseColorId, baseColors);
+			block.SetFloatArray(metallicId, metallic);
+			block.SetFloatArray(smoothnessId, smoothness);
+
+			var positions = new Vector3[1023];
+			for (int i = 0; i < matrices.Length; i++) {
+				positions[i] = matrices[i].GetColumn(3);
+			}
+		}
+```
+
+光照探针的创建需要通过`SphereHarmonicsL2`创建
+
+```c#
+			for (int i = 0; i < matrices.Length; i++) {
+				positions[i] = matrices[i].GetColumn(3);
+			}
+			var lightProbes = new SphericalHarmonicsL2[1023];
+			LightProbes.CalculateInterpolatedLightAndOcclusionProbes(
+				positions, lightProbes, null
+			);
+```
+
