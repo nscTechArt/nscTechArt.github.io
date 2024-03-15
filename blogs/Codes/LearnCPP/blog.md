@@ -8,5 +8,5 @@ title: Learn C++
 
 ---
 
-- [**Type Conversion, Type Aliases, and Type Deduction**](https://lovewithyou.tech/blogs/Codes/LearnCPP/ChTen)
+- [**Type Conversion, Type Aliases, and Type Deduction**](https://lovewithyou.tech/blogs/Codes/LearnCPP/Chapter10)
 
