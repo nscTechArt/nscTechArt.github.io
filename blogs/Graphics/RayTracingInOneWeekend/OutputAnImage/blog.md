@@ -1,10 +1,11 @@
 ---
 layout: page
-permalink: /blogs/Graphics/RayTracingInOneWeekend/2_OutputAnImage/index.html
+permalink: /blogs/Graphics/RayTracingInOneWeekend/OutputAnImage/index.html
 title: Output An Image
 ---
 
-## Output An Image
+### Output An Image
+---
 
 #### The PPM Image Format
 
