@@ -1,12 +1,12 @@
 ---
 layout: page
-permalink: /blogs/Unity/SRP中的平行光阴影小结/index.html
+permalink: /blogs/Unity/Catlike-SRP/SRP中的平行光阴影小结/index.html
 title: SRP中的平行光阴影 小结
 ---
 
 ### SRP中的平行光阴影 小结
 
-在SRP中自己实现平行光的阴影是一个很复杂的事情，我在读[Catlike的博客](https://catlikecoding.com/unity/tutorials/custom-srp/directional-shadows)时，往往要反复理解才能体会到其中的精妙。这篇小结我打算梳理一些我自己容易混淆的概念，希望日后回顾时能够发现曾经困惑的东西原来如此简单。
+在SRP中自己实现平行光的阴影是一个很复杂的事情，我在读[Catlike的博客](https://catlikecoding.com/unity/tutorials/custom-srp/directional-shadows)时，往往要反复理解，这篇小结我打算梳理一些我自己容易混淆的概念
 
 ---
 
