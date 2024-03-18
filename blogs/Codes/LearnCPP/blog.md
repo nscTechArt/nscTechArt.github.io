@@ -8,9 +8,6 @@ title: Learn C++
 
 ---
 
-- [**Function Overloading and Function Templates**](https://lovewithyou.tech/blogs/Codes/LearnCPP/Chapter11)
+#### Function Overloading and Function Templates
 
-#### Type Conversion, Type Aliases, and Type Decution
-
-- [**Implicit type conversion**](https://lovewithyou.tech/blogs/Codes/LearnCPP/10-1)
-
+- [**Introduction to function overloading**](https://lovewithyou.tech/blogs/Codes/LearnCPP/11-1)
