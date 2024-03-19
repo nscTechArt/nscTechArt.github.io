@@ -20,6 +20,11 @@ title: ABOUT ME
 
 
 
-**我的问题：**
+**Vulkan相关链接：**
 
-- 研究一下unity中的`ScriptableCullingParameters`，为什么会有`maxShadowDistance`这个变量
+- [**Vulkan入门精要**](https://fuxiii.github.io/Essentials.of.Vulkan/Introduction.html)
+- [**Vulkan Tutorial**](https://vulkan-tutorial.com/)
+- [**Vulkan Guide**](https://vkguide.dev/)
+- [**NVIDIA Vulkan Ray Tracing Tutorial**](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/)
+- [**Vulkan Samples**](https://github.com/SaschaWillems/Vulkan-Samples)
+
