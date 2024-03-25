@@ -10,5 +10,23 @@ title: The Vec3 Class
 
 我们将使用同一个类`vec3`来表示颜色、位置、方向、偏移量等等。同时，我们还会为`vec3`声明两个别名，`point3`和`color`。
 
-我们将在vec3.h头文件中定义vec3，同时也会定义一下Helper Functions。
+我们将在*vec3.h*头文件中定义`vec3`，同时也会定义一下Helper Functions：
+
+```c++
+#ifndef VEC3_H
+#define VEC3_H
+
+#include <cmath>
+#include <iostream>
+
+using std::sqrt;
+
+class vec3
+{
+public:
+    double e[3];
+    
+    vec3(): e{0, 0, 0} {}
+}
+```
 
