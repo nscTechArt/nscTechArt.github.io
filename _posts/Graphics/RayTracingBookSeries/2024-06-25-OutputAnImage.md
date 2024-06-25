@@ -73,7 +73,7 @@ std::cout << pixelR << ' ' << pixelG << ' ' << "0\n";
 }
 }
 
-+std::clog << "rDone.              \n";
+-std::clog << "rDone.              \n";
 ```
 
  
