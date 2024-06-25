@@ -5,3 +5,4 @@ export { imgPopup } from './components/img-popup';
 export { initLocaleDatetime } from './components/locale-datetime';
 export { toc } from './components/toc';
 export { highlightLines } from './components/highlight-lines';
+export { removeLines } from './components/remove-lines';
