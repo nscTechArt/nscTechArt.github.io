@@ -2,7 +2,7 @@
  * Hightlight specifiled lines
  */
 
-function highlightLinesInner(codeBlock, highlight_lines) {
+function addLinesInner(codeBlock, added_lines) {
   let current_line = null;
   let current_lineno = 1;
   for (let cur = codeBlock.firstChild; cur != null; cur = cur.nextSibling) {
@@ -23,13 +23,13 @@ function highlightLinesInner(codeBlock, highlight_lines) {
       codeBlock.removeChild(cur);
       cur = subNodes[newline_count];
       for (let i = 0; i < newline_count; i++) {
-        if (highlight_lines.includes(current_lineno)) {
-          let hll_node = document.createElement('span');
-          hll_node.setAttribute('class', 'hll');
-          codeBlock.insertBefore(hll_node, current_line);
-          for (let next = hll_node.nextSibling; next != subNodes[i]; next = hll_node.nextSibling)
-            hll_node.appendChild(next);
-          hll_node.appendChild(subNodes[i]);
+        if (added_lines.includes(current_lineno)) {
+          let added_node = document.createElement('span');
+          added_node.setAttribute('class', 'add');
+          codeBlock.insertBefore(added_node, current_line);
+          for (let next = added_node.nextSibling; next != subNodes[i]; next = added_node.nextSibling)
+            added_node.appendChild(next);
+          added_node.appendChild(subNodes[i]);
         }
         current_line = subNodes[i + 1];
         current_lineno++;
@@ -38,13 +38,13 @@ function highlightLinesInner(codeBlock, highlight_lines) {
   }
 };
 
-export function highlightLines() {
+export function addLines() {
   let blocks = document.getElementsByClassName('highlighter-rouge');
   [...blocks].forEach((elem) => {
-    const attr_highlight_lines = elem.getAttribute('highlight-lines');
-    if (attr_highlight_lines && attr_highlight_lines.length > 0) {
+    const attr_added_lines = elem.getAttribute('add-lines');
+    if (attr_added_lines && attr_added_lines.length > 0) {
       let lines = [];
-      let scopes = (',' + attr_highlight_lines).match(/(?<=\s|,)\d+(-\d+)?/g)
+      let scopes = (',' + attr_added_lines).match(/(?<=\s|,)\d+(-\d+)?/g)
       scopes.forEach(function (val) {
         let pos = val.split('-');
         let start = parseInt(pos[0]);
@@ -61,8 +61,8 @@ export function highlightLines() {
       })
       let pres = elem.getElementsByTagName('pre');
       let pre = pres[pres.length - 1];
-      highlightLinesInner(pre, lines);
-      elem.removeAttribute('highlight-lines');
+      addLinesInner(pre, lines);
+      elem.removeAttribute('add-lines');
     }
   })
 }
