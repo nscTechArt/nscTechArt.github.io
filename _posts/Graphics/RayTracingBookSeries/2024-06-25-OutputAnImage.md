@@ -1,7 +1,7 @@
 ---
 title: Output An Image
-date: 2024-06-24 +0800
-categories: [Graphics, Ray Tracing Book Series]
+date: 2024-06-25 21:00 +0800
+categories: [Graphics, Ray Tracing In One Weekend]
 tags: [光线追踪, 离线渲染]
 media_subpath: /assets/img/Graphics/RayTracingBookSeries/
 ---
@@ -42,8 +42,6 @@ int main()
 }
 ```
 {: file='main.cpp'} 
-{: highlight-lines="15" }
-{: remove-lines="16"}
 
 这段代码中，像素按照从左到右、从上之下的顺序绘制。 此外，在这个PPM图片中，红色的亮度值从最左边的0变为最右边的1，绿色的亮度值从最上面的0变为最下面的1，所以也不难推测图片的右下角应该呈现黄色。
 
@@ -57,23 +55,34 @@ int main()
 
 对于较长时间的渲染来说，我们最好可以追踪渲染的进度：
 
-```diff
-for (int j = 0; j < imageHeight; j++)
+```c++
+#include <iostream>
+
+int main()
 {
-+   std::clog << "rScanlines remaining: " << (imageHeight - j) << ' ' << std::flush;
-for (int i = 0; i < imageWidth; i++)
-{
-double r = double(i) / (imageWidth - 1);
-double g = double(j) / (imageHeight - 1);
+    // Image
+    int imageWidth = 256;
+    int imageHeight = 256;
 
-int pixelR = int(255.999 * r);
-int pixelG = int (255.999 * g);
+    // Render
+    std::cout << "P3\n" << imageWidth << ' ' << imageHeight << "\n255\n";
+    for (int j = 0; j < imageHeight; j++)
+    {
+        std::clog << "rScanlines remaining: " << (imageHeight - j) << "\n" << std::flush;
+        for (int i = 0; i < imageWidth; i++)
+        {
+            double r = double(i) / (imageWidth - 1);
+            double g = double(j) / (imageHeight - 1);
 
-std::cout << pixelR << ' ' << pixelG << ' ' << "0\n";
+            int pixelR = int(255.999 * r);
+            int pixelG = int (255.999 * g);
+
+            std::cout << pixelR << ' ' << pixelG << ' ' << "0\n";
+        }
+    }
+    
+    std::clog << "rDone.              \n";
 }
-}
-
-+std::clog << "rDone.              \n";
 ```
-
- 
+{: file="main.cpp"}
+{: add-lines="13, 26"}
