@@ -201,4 +201,170 @@ $$
                                           {\text{Number of items total}}
 $$
 
+如果我们将概率函数和密度函数组合在一次，我们就可以将其解释为树高度的统计预测因子：
+
+
+$$
+\text{Probability a random tree is between } H \text{ and } H’ =
+        \text{Bin Density}\cdot(H-H’)
+$$
+
+
+简而言之，概率密度函数（简称为PDF）是一个连续函数，可以对其进行积分以确定结果在积分上的可能性。
+
+### 3.4 Constructing a PDF
+
+让我们使用下面这个函数来构建一个PDF
+
+![](fig-3.04-linear-pdf.jpg)
+
+如果我们将$p(r)$作为一个PDF，根据PDF的性质，我们可得:
+
+
+$$
+\operatorname{area}(p(r), 0, 2) = 1
+$$
+
+
+
+同时，由于$p(r)$是一个线性函数，我们可以将其表示为常数乘以变量的形式，即
+
+
+$$
+p(r)=C \cdot r
+$$
+
+
+那么我们就可以通过积分来倒推常数$C$：
+
+
+$$
+\displaylines{1 = \operatorname{area}(p(r), 0, 2) \\ = \int_{0}^{2} C \cdot r dr \\ = C \cdot \int_{0}^{2} r dr \\ = C \cdot \frac{r^2}{2} \Big|_{0}^{2} \\ = C ( \frac{2^2}{2} - \frac{0}{2} ) \\ C = \frac{1}{2}}
+$$
+
+
+这样，我们就可以得到$r$在区间$[x_0, x_1]$上的概率为：
+
+
+$$
+\operatorname{Probability} (r | x_0 \leq r \leq x_1 ) = \int_{x_0}^{x_1}  \frac{r}{2} dr
+$$
+
+此外，PDF作为一个连续函数，只能告诉你变量落在某个特定区间上的概率，当你想要计算区间某一个确切的值的概率时，得到的结果永远是0。
+
+### 3.5 Choosing our Samples
+
+ 如果我们已经有了对于一个特定函数的PDF，那么我们就可以计算出该函数在任意区间内取值的概率。这个性质在光线追踪中很重要，因为我们可以用PDF来确定在场景中的采样方式。如果场景中的PDF已知，那么我们就可以在保持场景亮度准确性的前提下，将更多的光线引导向光源。**只是在研究这个问题之前，我们还需要解决如何使用PDF生成一个随机数的问题。**
+
+**“生成具有PDF的随机数”**，我们可以将这句话理解为：**从一个特定的PDF所定义的分布中抽取随机样本**。
+
+比方说，我们有一个在区间$[0, 10]$上均匀分布的PDF，如果要使用这个PDF来生成随机数，那么随机数生成器就必须同样满足均匀生成随机值的条件。我们的光线追踪器所使用`randomZeroToOne()`就符合这个要求。所以，我们就可以通过`10.0 * randomZeroToOne()`在生成一个符合该PDF的随机数。
+
+然而问题在于，大多数情况下，我们所关心的PDF都不是均匀的，所以我们需要通过某种方法，将均匀的随机数生成器，转换为非均匀的随机数生成器，且该随机数生成器的分布有PDF定义。
+
+我们还是通过例子来思考，对于函数$p(r)=\frac{r}{2}$的在区间$[0, 10]$上的PDF，其中当值越接近于2时，概率越大。我们知道，必然存在一个值$x$，使得被该值分割的两个区间的概率相等，换句话说，任选一个值，则该值小于$x$与大于$x$的概率相等，都是50%。我们依然可以通过积分求解$x$：
+
+
+$$
+50\% = \int_{0}^{x}  \frac{r}{2} dr  = \int_{x}^{2}  \frac{r}{2} dr
+$$
+
+
+解得：
+
+
+$$
+\displaylines{0.5 = \frac{r^2}{4} \Big|_{0}^{x} \\ 0.5 = \frac{x^2}{4} \\ x^2 = 2 \\ x = \sqrt{2}}
+$$
+
+
+让我们再次回顾一下我们的问题：如何使用均等的随机数生成器，生成符合非均匀PDF的随机数。有了$x=\sqrt2$，我们就可以创建一个新的函数`f(d)`，它使用`double d = randomZeroToOne`作为参数，如果d小于等于0.5，则返回一个范围在$[0, \sqrt2]$的随机数，否则返回一个范围在$[\sqrt2， 2]$的随机数：
+
+```c++
+double f(double d)
+{
+	if (d <= 0.5)
+		return sqrt(2.0) * randomZeroToOne();
+    else
+        return sqrt(2.0) + (2 - sqrt(2.0)) * randomZeroToOne();
+}
+```
+
+当然我们所举的列子是可以通过解析法计算的，相对来说比较简单。我们来看下面这个函数：
+
+
+$$
+p(x) = e^{\frac{-x}{2 \pi}} sin^2(x)
+$$
+
+
+函数图像如下：
+
+![](fig-3.07-exp-sin2.jpg)
+
+```c++
+#include "rayTracing.h"
+
+#include <algorithm>
+#include <vector>
+#include <iostream>
+#include <iomanip>
+#include <math.h>
+#include <cmath>
+#include <stdlib.h>
+
+struct sample
+{
+    double x;
+    double pX;
+};
+
+bool compareByX(const sample& a, const sample& b)
+{
+    return a.x < b.x;
+}
+
+int main()
+{
+    unsigned int N = 10000;
+    double sum = 0.0;
+    
+    // iterate through all of our samples
+    std::vector<sample> samples;
+    for (unsigned int i = 0; i < N; i++)
+    {
+        // get the area under the curve
+        auto x = randomDouble(0, 2 * pi);
+        auto sinX = sin(x);
+        auto pX = exp(-x / (2 * pi)) * sinX * sinX;
+        sum += pX;
+        // store this sample
+        sample thisSample = {x, pX};
+        sample.push_back(thisSample);
+    }
+    
+    // sort samples by x
+    std::sort(samples.begin(), samples.end(), compareByX);
+    
+    // find out the samples at which we have half of our area
+    double halfSum = sum / 2.0;
+    double halfWayPoint = 0.0;
+    double accum = 0.0;
+    for (unsigned int i = 0; i < N; i++)
+    {
+        accum += samples[i].pX;
+        if (accum >= halfSum)
+        {
+            halfWayPoint = samples[i].x;
+            break;
+        }
+    }
+    
+    std::cout << std::fixed << std::setprecision(12);
+    std::cout << "Average = " << sum / N << '\n';
+    std::cout << "Area under curve = " << 2 * pi * sum / N << '\n';
+    std::cout << "Halfway = " << halfway_point << '\n';
+}
+
+```
 
