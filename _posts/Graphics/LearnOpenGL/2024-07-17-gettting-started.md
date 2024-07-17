@@ -147,7 +147,7 @@ while (!glfwWindowShouldClose(window))
     glfwPollEvents();
 }
 ```
-{add-line="3"}
+{: add-line="3"}
 
 #### Rendering
 
@@ -225,7 +225,7 @@ glBindBuffer(GL_ARRAY_BUFFER, VBO);
 glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 ```
 
-glBufferData是OpenGL中的一个函数，用于为当前绑定的缓存对象（如VBO）分配内存空间，并将数据拷贝到该缓存对象的内存中。我们来看一下该函数的签名：
+`glBufferData`是OpenGL中的一个函数，用于为当前绑定的缓存对象（如VBO）分配内存空间，并将数据拷贝到该缓存对象的内存中。我们来看一下该函数的签名：
 
 ```c++
 void glBufferData(GLenum target, GLsizeiptr size, const void* data, Glenum usage);
