@@ -1206,11 +1206,446 @@ std::string& returnByReference();
 const std::string& returnByReferenceToConst();
 ```
 
+下面是一个具体的例子：
+
+```c++
+#include <iostream>
+#include <string>
+
+const std::string& getProgramName()
+{
+    static const std::string prorgramName {"Calculator"};
+    return prorgramName;
+}
+
+int main()
+{
+	std::cout << "This program is named " << getProgramName();
+}
+```
+
+在第六行中，我们使用了static关键字，从而表面该变量会在程序结束时销毁
+
 #### 12.12.2 The object being returned by reference must exist after the function returns
 
+还是以上面的程序为例，如果我们删去`static`关键字，则`programName`就会变成一个local变量，对应地，函数所返回的引用就就会变成悬空引用，从而会导致未被定义的行为。
 
+#### 12.12.3 Don't return non-const
 
-#### 12.12.3
-#### 12.12.4
-#### 12.12.5
-#### 12.12.6
+还是上面的程序，我们返回的是一个常量静态变量的引用，我们需要注意的是**，尽量避免返回一个非常量静态变量的引用**。我们考虑下面这个例子，然后分析一下其中可能会出现的问题：
+
+```c++
+#include <iostream>
+#include <string>
+
+const int& getNextID()
+{
+    static int s {0};
+    ++s;
+    return s;
+}
+
+int main()
+{
+    const int& id1 {getNextID()};
+    const int& id2 {getNextID()};
+
+    std::cout << id1 << id2 << '\n';
+}
+```
+
+该程序返回的结果是：
+
+```
+22
+```
+
+出现这样的结果的原因是，id1和id2都是同一个变量的引用，所以只有当该变量被修改，所有的引用也会被修改。
+
+#### 12.12.4 Assigning/initializing a normal variable with a returned reference makes a copy
+
+如果函数返回了引用，并且该引用被用来赋值或初始化一个非引用变量，则返回值会被拷贝。我们可以结合下面这个例子：
+
+```c++
+#include <iostream>
+#include <string>
+
+const int& getNextID()
+{
+    static int s {0};
+    ++s;
+    return s;
+}
+
+int main()
+{
+    const int id1 {getNextID()};
+    const int id2 {getNextID()};
+
+    std::cout << id1 << id2 << '\n';
+}
+```
+
+在这个示例中，函数`getNextID()`返回了一个引用，但是变量id1和id2都不是引用，这种情况下，返回的引用中的值会拷贝到正常的变量中，所以这段程序最终的结果是：
+
+```c++
+12
+```
+
+值得一提的是，如果程序返回的是悬空引用，拷贝悬空引用中的值将会导致未被定义的行为，例如:
+
+```c++
+#include <iostream>
+#include <string>
+
+const std::string& getProgramName()
+{
+    const std::string programName {"Hi"};
+    return programName;
+}
+
+int main()
+{
+    std::string name {getProgramName()}; // makes a copy of dangling reference
+    std::cout << name << '\n';
+}
+```
+
+#### 12.12.5 It's okay to return reference parameter by reference
+
+有很多情况下都适合使用引用作为返回类型，我们后续会遇到很多这样的例子。但是我们现在可以先来介绍一个。
+
+如果一个参数通过引用传递给函数，那么通过引用返回这个参数是安全的。这是有道理的：为了将参数传递给函数，参数必须存在于调用者的作用域中。当被调用的函数返回时，该对象仍必须存在于调用者的作用域中。我们来看一个例子：
+
+```c++
+#include <iostream>
+#include <string>
+
+const std::string& firstAlphabetical(const std::string& a, const std::string& b)
+{
+    return (a < b) ? a : b;
+}
+
+int main()
+{
+    std::string hello {"hello"};
+    std::string world {"world"};
+    std::cout << firstAlphabetical(hello, world) << '\n';
+}
+```
+
+#### 12.12.6 Return by address
+
+在C++中，函数可以通过返回对象的引用或者对象的地址来返回一个对象。两者虽然在实现细节上有些不同，但在许多情况下功能相似。下面是返回地址和返回引用的详细对比。
+
+**返回引用**
+
+- 返回引用时，函数返回的是对象的引用（reference）。调用者使用返回的引用时，可以直接操作该对象。
+- 使用返回引用时，必须确保返回的对象在函数返回后仍然有效，否则会导致悬空引用（dangling reference）。
+
+**返回地址**
+
+- 返回地址时，函数返回的是对象的指针（pointer）。调用者使用返回的指针时，可以通过指针访问和操作该对象。
+- 使用返回地址时，同样必须确保返回的对象在函数返回后仍然有效，否则会导致悬空指针（dangling pointer）。
+
+返回地址的优势和劣势
+
+**优势**
+
+- **可以返回`nullptr`**：返回地址最大的优势是可以在没有找到有效对象时返回`nullptr`。例如，在一个学生列表中搜索特定学生时，如果找到匹配的学生，可以返回指向该学生对象的指针。如果没有找到匹配的学生，可以返回`nullptr`，表示没有找到匹配的对象。
+
+- **需要检查`nullptr`**：使用返回地址时，调用者必须在解引用指针前检查是否为`nullptr`。如果没有进行检查而直接解引用`nullptr`，将导致未定义行为（undefined behavior），可能会导致程序崩溃或其他不可预知的问题。
+
+### 12.13 In and out parameters
+
+#### 12.13.1 In parameters
+
+输入参数是传递给函数的值，函数只读取这些值，而不会对其进行修改。通常情况下，输入参数通过值传递（pass by value）或常量引用传递（pass by constant reference）。
+
+```c++
+void printValue(const int& value) {
+    std::cout << value << '\n';
+}
+```
+
+#### 12.13.2 Out parameters
+
+输出参数是传递给函数的值，函数会修改这些值并返回给调用者。输出参数通常通过指针或引用传递，以便函数能够直接修改调用者提供的变量。
+
+```c++
+void getNextValue(int& result)
+{
+	static int value = 0;
+	result = ++value;
+}
+```
+
+#### 12.13.3 Out parameters have an unnatural syntax
+
+输出参数虽然有用，但是也有一些劣势。
+
+首先，函数调用必须实例化并初始化对象，并将对象作为实参传递。并且这些对象要能够被赋值，这意味它们不能是`const`变量。
+
+其次，因为函数调用必须传递对象，所以我们既不能使用临时值，也不能使用简单的单一表达式。
+
+我们可以通过下面这个示例程序来进一步理解：
+
+```c++
+#include <iostream>
+
+int getByValue()
+{
+	return 5;
+}
+
+void getByReference(int& x)
+{
+    x = 5;
+}
+
+int main()
+{
+    // return by value
+    int x {getByValue()}; // can use to initializa object
+    std::cout << getByValue() << '\n'; // can use teporary return value in expression
+    
+    // return by out parameter
+    int y {}; // must first allocate an assignable object
+    getByReference(y); // then pass to function to assign the desired value
+    std::cout << y << '\n'; // and only then can we use that value
+}
+```
+
+可以看出，输出参数的使用语法相对来说没有那么自然。
+
+#### 12.13.4 Out-parameters by reference don't make it obvious the arguments will be modified
+
+当我们用一个函数的返回值为一个对象赋值时，很明显这个对象的值会被修改，例如：
+
+```c++
+x = getByValue();
+```
+
+但是，对于通过引用传递的输出参数来说，当函数被调用时，我们很难看出一个参数是输入参数还是输出参数，也就不容易直观地判断该参数是否会被修改。例如：
+
+```c++
+void getSinCos(double degrees, double& sinOut, double$ cosOut)
+{
+	constexpr double pi { 3.14159265358979323846 }; 
+    double radians = degrees * pi / 180.0;
+    sinOut = std::sin(radians);
+    cosOut = std::cos(radians);
+}
+
+int main()
+{
+    double sin { 0.0 };
+    double cos { 0.0 };
+
+    double degrees{};
+    std::cout << "Enter the number of degrees: ";
+    std::cin >> degrees;
+
+    // getSinCos will return the sin and cos in variables sin and cos
+    getSinCos(degrees, sin, cos);
+
+    std::cout << "The sin is " << sin << '\n';
+    std::cout << "The cos is " << cos << '\n';
+}
+```
+
+这种情况下，使用地址传递会在一定程度上让输出参数更显而易见，因为函数调用中需要获取作为实参的对象的地址。我们考虑下面这个程序：
+
+```c++
+void foo1(int x);  // pass by value
+void foo2(int& x); // pass by reference
+void foo3(int* x); // pass by address
+
+int main()
+{
+    int i {};
+    
+    foo1(i); // can't modify i
+    foo2(i); // can modify i, but not abvious
+    foo3(&i); // clearly can modify i
+    
+    int *ptr {&i};
+    foo3(ptr); // can modify i, but not abvious
+}
+```
+
+在函数调用中，`foo3(&i)`中的取址符很明显地告诉我们可能会修改作为实参的对象。但使用地址传递也并非万无一失，比如函数调用`foo3(ptr)`就同样不明显。
+
+**所以，让我们总结一下，出于以下原因，我们应该尽量避免使用输出参数：**
+
+1. **代码可读性和可维护性：**
+   - 输出参数通常通过引用或指针传递，容易让代码变得复杂和难以理解。
+   - 调用者需要检查并理解哪些参数会被修改，这增加了理解和维护代码的难度。
+2. **潜在的错误**：
+   - 如果调用者忘记初始化输出参数，或者传递了不正确的参数类型，可能导致未定义行为。
+   - 在使用指针作为输出参数时，可能会出现空指针解引用的风险。
+3. **函数接口不明确**：
+   - 输出参数使得函数的接口不够明确，因为调用者必须知道哪些参数是输入的，哪些是输出的。
+
+#### 12.13.5 In/out parameters
+
+in-out参数（输入/输出参数）是既用于传递给函数输入值，又用于接收函数计算结果的参数。函数在处理这些参数时，会读取它们的初始值并进行某些操作，然后将操作后的结果存回这些参数中。
+
+#### 12.13.6 When to pass by non-const reference
+
+如果是出于避免拷贝实参的目的而使用引用传递，那么在绝大多数情况下，我们应该使用常量引用。
+
+但是，也有两种情况使用非常量引用是更好的选择。
+
+首先，当形参是一个in-out参数时，使用非常量引用进行传递。对于in-out参数，我们不仅需要读取值，还会修改值，所以需要使用非常量引用。例如：
+
+```c++
+void doModify(Foo& inout)
+{
+    // modify inout
+}
+
+int main()
+{
+    Foo foo{};
+    doModify(foo); 
+}
+```
+
+这种情况下，我们可以先通过值或者常量引用传递对象，然后通过值返回一个新的对象，继而被函数调用用于赋值：
+
+```c++
+Foo someFcn(const Foo& in)
+{
+    Foo foo { in }; // copy here
+    // modify foo
+    return foo;
+}
+
+int main()
+{
+    Foo foo{};
+    foo = someFcn(foo); // makes it obvious foo is modified, but another copy made here
+}
+```
+
+虽然多了两次额外拷贝的成本（有时候编译器会优化其中一个拷贝），但是从语法上更好理解。
+
+还有一种情况最好使用飞常量引用传递。即当一个函数会向调用者按值返回一个对象，但复制该对象非常昂贵时，尤其是在性能关键代码部分中多次调用该函数时，例如：
+
+```c++
+void generateExpensiveFoo(Foo& out)
+{
+	// modify out
+}
+
+int main()
+{
+    Foo foo {};
+    generateExpensiveFoo(foo);
+}
+```
+
+---
+
+### 12.14 Type decuction with pointers, references, and const
+
+在之前的内容中，我们讨论过`auto`关键字如何让编译器从初始化中推导出变量的类型。
+
+我们也提到过，默认情况下，类型推导会丢弃掉`const`与`constexpr`修饰符。想要保证`const`或`constexpr`不被丢弃，可以为`auto`关键字添加对应的修饰符。
+
+#### 12.14.1 Type deduction drops references
+
+除了会丢弃掉const与constexpr，类型推导同样会丢弃引用：
+
+```c++
+#include <iostream>
+
+std::string& getRef();
+
+int main()
+{
+    auto ref {getRef();}
+}
+```
+
+虽然函数getRef()返回的是`std::string&`，但ref推导得到的类型是`std::string`
+
+类似的，如果想要保留引用类型，就需要在定义变量时明确是引用类型，例如：
+
+```c++
+auto& ref {getRef()};
+```
+
+#### 12.14.2 Top-level const and low-level const
+
+C++中，`const`关键词可以用来限定变量、指针或引用。而根据`const`在类型中的位置，可以分为顶层`const`与底层`const`。
+
+顶层`const`用于描述变量**本身**是常量，这意味着一旦变量初始化，就不能被修改了。顶层`const`可以应用于任何对象。
+
+底层`const`用于描述指针或引用所指向的对象是常量。这意味着通过该指针或引用不能修改所指向的对象的值。底层`const`应用于指针或引用的类型。
+
+下面是一些具体的例子：
+
+```c++
+const int x = 42; // top level，表示x本身是常量，不能被修改
+const int* ptr1 = &x; // low level，表示prt1是指向const int的指针，prt1所指向的对象是常量
+int* const ptr2 = &y; // top level，表示ptr2是一个常量指针，prt2本身是常量，不能指向其他地址
+const int* const ptr3 = &x; // ptr3 是一个指向 const int 的常量指针，表示 ptr3 本身是常量（顶层const），且 ptr3 所指向的对象是常量（底层const）
+```
+
+当我们使用类型推导时，顶层`const`通常会被忽略，而底层`const`在类型推导中会被保留。
+
+#### 12.14.3 Type deduction and const references
+
+当使用`auto`进行类型推导时，如果初始化是一个指向`const`或`constexpr`的引用，那么类型推导的过程中，会先去除引用类型（如果适用，还会重新应用引用），然后去除顶层`const`或`constexpr`
+
+这样可以确保在类型推导过程中，得到的类型是适当的基本类型，而不是受限的常量或引用类型，例如：
+
+```c++
+const int& ref = 42;
+auto value = ref; // value的类型是int
+```
+
+#### 12.14.4 Type deduction and pointers
+
+与引用不同的是，类型推导并不会丢弃指针：
+
+```c++
+#include <string>
+
+std::string* getPtr();
+
+int main()
+{
+	auto ptr1 {getPtr()}; // std::string*
+}
+```
+
+我们也可以将*与类型推导结合使用：
+
+```c++
+#include <string>
+
+std::string* getPtr();
+
+int main()
+{
+	auto ptr1 {getPtr()}; // std::string*
+    auto* ptr2 {getPtr()}; // std::string*
+}
+```
+
+#### 12.14.5 The difference between auto and auto
+
+**`auto` 推导值类型**：
+
+- `auto`会根据初始化表达式的类型进行类型推导，忽略顶层`const`和引用。
+- 例如，`auto y = x;`会将`y`的类型推导为`int`，即使`x`是`const int`。
+
+**`auto*` 推导指针类型**：
+
+- `auto*`会根据初始化表达式的类型推导出指针类型。
+- 例如，`auto* q = p;`会将`q`的类型推导为指向`p`所指向类型的指针。
+
+---
