@@ -427,11 +427,11 @@ void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean norm
 
 **`stride`**：
 
-- 指定连续顶点属性之间的字节偏移量。如果顶点属性是紧密打包的，可以将其设为0。否则，它表示每个顶点的字节数。
+- 每个顶点所的所有属性所占据的字节数
 
 **`pointer`**：
 
-- 指定第一个顶点属性的第一个组件在缓冲区数据中的偏移量。通常为`(void*)0`，表示从缓冲区的起始位置开始。
+- 该顶点的所有属性中，在当前配置的顶点属性之前有多少个字节，即本参数表示当前顶点属性的偏移量
 
 当OpenGL已经明白如何解释vertex data后，我们就可以通过函数`glEnableVertexAttribArray`来启用对应的顶点属性了。默认情况下，顶点属性是没有被启用的。
 
@@ -561,12 +561,14 @@ glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 ```
 
-由于我们现在使用EBO，也就是从index buffer中绘制三角形，所以我们需要将glDrawArrays替换为glDrawElements：
+由于我们现在使用EBO，也就是从index buffer中绘制三角形，所以我们需要将`glDrawArrays`替换为`glDrawElements`：
 
 ```c++
 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
 ```
+
+
 
 这里我们还需要额外提一点，就是VAO不仅存储顶点属性配置，还会存储EBO的绑定状态，这意味着在绑定VAO时，关联的EBO也会自动绑定。所以在使用VAO进行绘制时，不需要每次都重新绑定EBO，只需要绑定VAO即可。
 
@@ -718,3 +720,302 @@ glEnableVertexAttribArray(1);
 现在，我们的shader源码还是以字符串常量的形式存储并被读取。我们现在来实现一个`shader`类，它包含从本地读取shader、编译、连接、检查这些功能和。
 
 我们将shader类的定义与实现都放在一个头文件中，这里就不再展示代码了。
+
+---
+
+### Textures
+
+我们是用纹理为渲染添加更多细节。为了将一个纹理映射到三角形上，我们需要明确三角形的每个顶点对应纹理的哪个部分。所以我们为顶点引入纹理坐标这个概念，用于指定顶点从纹理图像中的哪个部分采样。我们将使用纹理坐标从纹理中获取颜色值的过程成为采样。然后片段插值会完成剩下的功能。
+
+我们需要做的工作大部分在于告诉OpenGL如何采样。
+
+#### Texture Wrapping
+
+通常情况下，纹理坐标的范围是[0, 1]，但如果[0, 1]的范围无法完全覆盖纹理要怎么办呢？换种说法，如果我们指定了超出了[0, 1]的纹理坐标要怎么办。OpenGL为我们提供了多种解决方案：
+
+- `GL_REPEAT`（默认选项）
+- `GL_MIRRORED_REPEAT`
+- `GL_CLAMP_TO_EDGE`
+- `GL_CLAMP_TO_BORDER`
+
+OpenGL中，这些选项需要在纹理坐标的两个轴向上分别设置，具体做法是使用`glTexParameteri`：
+
+```c++
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+```
+
+需要注意的是，如果我们选择最后一个选项，则还需要额外指定图片border所使用的颜色值：
+
+```c++
+float borderColor[] = { 1.0f, 1.0f, 0.0f, 1.0f };
+glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);  
+```
+
+#### Texture Filtering
+
+在纹理映射中，如果我们给一个很大的对象提供了一个较低分辨率的纹理时，纹理细节就不足以清晰地覆盖整个表面。为了减轻这个问题，OpenGL提供了纹理过滤的选项：
+
+- `GL_NEAREST`：默认选项
+- `GL_LINEAR` 
+
+在OpenGL中设置纹理的过滤方式时，我们需要分别设置放大和缩小的过滤参数：
+
+```c++
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+```
+
+通常来说，当纹理被放大时，我们需要考虑如何平滑像素之间的过渡，避免明显的像素画化效果，所以我们选择双线性过滤来插值平滑像素。而纹理缩小时，则需要考虑如何合并多个像素的信息，避免失真和摩尔纹。
+
+##### Mipmaps
+
+我们考虑这样一个场景：距离相机较远的物体被指定了分辨率很高的贴图。由于物体距离较远，可能只会使用数个片段，那么OpenGL就难以从高分辨率贴图中为片段获取正确的颜色值，因为给定片段在贴图上可能会覆盖很多个texel。从而造成失真，同时也会带来带宽不必要的负担。
+
+我们可以通过mipmap来解决这个问题。Mipmaps是一种优化技术，通过生成一系列不同分辨率的纹理，从原始分辨率开始，每层都是上一层分辨率的一半。这样可以在渲染时，根据纹理距离视点的远近，选择合适的分辨率层，减少细节丢失和失真，同时减少纹理带宽和计算资源。
+
+通过调用函数`glGenerateMipmap`，我们可以为纹理生成mipmap。
+
+Mipmaps提供了不同分辨率的纹理图像，但在具体渲染时，OpenGL需要决定使用哪一层或如何在层之间进行插值。这就需要过滤方法来指导。我们可以像普通贴图一样，使用`GL_NEAREST`和`GL_LINEAR`作为过滤选项，但是对于mipmap来说，OpenGL提供了一些额外的选项，以供mipmap在缩小时使用，这些选项不仅控制在选择哪个Mipmap层时的采样方法，还控制如何在不同Mipmap层之间进行插值。
+
+- `GL_NEAREST_MIPMAP_NEAREST`：选择最接近的Mipmap层，然后使用最近邻采样。
+- `GL_LINEAR_MIPMAP_NEAREST`：选择最接近的Mipmap层，然后使用双线性插值。
+- `GL_NEAREST_MIPMAP_LINEAR`：在两个最接近的Mipmap层之间进行最近邻采样，然后进行线性插值。
+- `GL_LINEAR_MIPMAP_LINEAR`：在两个最接近的Mipmap层之间进行双线性插值（即三线性过滤）。
+
+**需要注意的是，这些选项只适合在缩小（minification）时使用的。这些选项涉及到多个Mipmap层的选择和插值，而在放大（magnification）时，通常只需要从最顶层的Mipmap中采样。**
+
+此外，如果我们对普通纹理使用mipmap的过滤选项，因为这些纹理没有生成Mipmap层，这些过滤选项将无法正常工作。
+
+#### Loading and Creating Textures
+
+介绍了相关的理论知识，我们来看看怎么在我们的OpenGL程序中使用贴图。首先需要做的是将图片加载到程序中。但由于图片的格式众多，每个格式都有自己存储数据的结构与顺序。所以我们不妨使用第三方库来为我们解决这个问题。
+
+##### Generating a texture
+
+OpenGL中的纹理对象的创建方式：
+
+```c++
+unsigned int texture;
+glGenTextures(1, &texture);
+```
+
+然后我们需要将创建的纹理绑定为当前OpenGL的纹理对象：
+
+```cpp
+glBindTexture(GL_TEXTURE_2D, texture);
+```
+
+当绑定完成后，我们需要调用glTexImage2D，从而当前绑定的纹理对象分配存储空间，并将像素数据上传到 GPU。函数原型为：
+
+```c++
+void glTexImage2D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *data);
+```
+
+其中：
+
+**`target`**: 目标纹理类型。对于二维纹理，使用 `GL_TEXTURE_2D`。
+
+**`level`**: 纹理的细节级别。对于基本的纹理，通常为 0。
+
+**`internalFormat`**: 指定纹理的内部格式，定义了纹理的颜色组件。例如，`GL_RGBA` 表示每个纹素有红、绿、蓝和透明度四个分量。
+
+**`width`**: 纹理的宽度（以像素为单位）。
+
+**`height`**: 纹理的高度（以像素为单位）。
+
+**`border`**: 纹理的边框宽度。必须为 0。
+
+**`format`**: 像素数据的格式。例如，`GL_RGBA` 表示像素数据包含红、绿、蓝和透明度四个分量。
+
+**`type`**: 像素数据的数据类型。例如，`GL_UNSIGNED_BYTE` 表示每个颜色分量是一个无符号字节。
+
+**`data`**: 指向图像数据的指针。可以是 `nullptr`，表示只分配内存而不上传数据。
+
+**关于internalFormat和format这两个参数，我们可以理解为：前者表示我们希望图片载入到GPU中所使用的格式，而后者是图片本身的格式**
+
+当我们生成纹理后，最好释放通过`stb_image`所加载的图片资源：
+
+```c++
+stbi_image_free(data);
+```
+
+##### Applying Textures
+
+现在，我们在vertex data中再添加顶点的纹理坐标：
+
+```c++
+float vertices[] = {
+    // positions          // colors           // texture coords
+     0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
+     0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
+    -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
+    -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // top left 
+};
+```
+
+这样的话，VBO的内存格式就如下图所示：
+
+![](vertex_attribute_pointer_interleaved_textures.png)
+
+那么纹理坐标的顶点属性指针配置方式如下：
+
+```c++
+glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+glEnableVertexAttribArray(2);
+```
+
+我们还需要分别调整vertex shader和fragment shader。
+
+vertex shader需要新增一个顶点属性变量，此外还需要将纹理坐标输出给fragment shader：
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aColor;
+layout (location = 2) in vec2 aTexCoord;
+
+out vec3 myColor;
+out vec2 myTexCoord;
+
+void main()
+{
+    gl_Position = vec4(aPos, 1.0);
+    myColor = aColor;
+    myTexCoord = aTexCoord;
+}
+```
+
+fragment shader需要接收vertex shader的两个输出值（保证变量命名一致）。同时fragment shader还需要能够获取纹理对象。但是我们要如何将纹理对象传递给fragment shader呢？
+
+GLSL为OpenGL中的纹理对象提供了一个内置的数据类型：`sampler`，sampler需要一个后缀，来表明纹理对象的类型，如sampler1D、sampler3D。在我们的案例中，我们需要使用sampler2D。在fragment shader中获取纹理只需要声明一个uniform sampler2D变量即可：
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+  
+in vec3 myColor;
+in vec2 myTexCoord;
+
+uniform sampler2D ourTexture;
+
+void main()
+{
+    FragColor = texture(ourTexture, TexCoord);
+}
+```
+
+在GLSL采样一个纹理时，需要调用`texture`函数，第一个参数是对应的`sampler`，第二个参数则是纹理坐标.
+
+当我们绘制物体时，需要将纹理绑定即可，OpenGL会自动将绑定的纹理赋值给fragment shader的`sampler`：
+
+```c++
+glBindTexture(GL_TEXTURE_2D, texture);
+glBindVertexArray(VAO);
+glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+```
+
+##### Texture Units
+
+此时我们可能有一个疑问，为什么我们不通过`glUnifrom`函数来为fragment shader中的`uniform sampler`变量赋值呢，而是简单调用了glBindTexture就完成了赋值。为了回答这个问题，我们需要引入纹理单元这个概念。
+
+实际上，我们可以给fragment shader中的`sampler`一个*location*值，这样我们就可以在fragment shader中使用多个纹理。我们将纹理的location值称为texture unit。
+
+纹理单元（Texture Unit）是用于处理和管理多重纹理的机制。**每个纹理单元只能绑定一个特定类型的纹理对象**。例如，如果在纹理单元 0 上绑定了一个 2D 纹理，则不能在同一个纹理单元上同时绑定另一个 2D 纹理。
+
+虽然一个纹理单元不能同时绑定多个同类型的纹理，但它可以同时绑定不同类型的纹理。例如，一个纹理单元可以绑定一个 2D 纹理和一个 3D 纹理，但这在实际使用中意义不大，因为通常在着色器中需要指定具体的纹理单元和类型。纹理单元使得在渲染过程中可以灵活地使用和切换多个纹理，而不需要频繁地重新绑定纹理对象。
+
+现在我们可以回答开始的问题了：如果一个着色器中只有一个纹理单元，并且只需要绑定一个纹理，那么你可以直接使用 `glBindTexture` 来为该纹理单元绑定纹理，而不需要显式调用 `glActiveTexture`。在这种情况下，OpenGL 默认使用 `GL_TEXTURE0` 纹理单元。
+
+如果想在fragment shader中使用两个纹理，则需要在fragment shader中声明两个`sampler2D`：
+
+```glsl
+#version 330 core
+...
+
+uniform sampler2D texture1;
+uniform sampler2D texture2;
+
+void main()
+{
+    FragColor = mix(texture(texture1, TexCoord), texture(texture2, TexCoord), 0.2);
+}
+```
+
+在OpenGL中，我们需要指定shader中的纹理所对应的纹理单元。 我们则需要先激活对应的纹理单元：
+
+```c++
+myShader.use();
+// write code like this
+glUniform1i(glGetUniformLocation(myShader.ID, "texture1"), 0);
+// or use our shader utility function
+myShader.setInt("texture2", 1);
+```
+
+在绘制物体时对对应的纹理单元进行绑定：
+
+```c++
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D, texture1);
+glActiveTexture(GL_TEXTURE1);
+glBindTexture(GL_TEXTURE_2D, texture2);
+
+glBindVertexArray(VAO);
+glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0); 
+```
+
+还有一点需要注意的是，OpenGL默认图片Y轴上的0.0坐标位于图片底部，但实际图片Y轴上的0.0坐标位于顶部，所以我们需要在Y轴上反转图片：
+
+```c++
+stbi_set_flip_vertically_on_load(true);  
+```
+
+---
+
+### Transformations
+
+#### In Practice
+
+由于OpenGL没有内置矩阵和向量，所以我们在这里使用第三方数学库GLM。在我们main.cpp文件中，我们引用如下的库：
+
+```c++
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+```
+
+当引入变换矩阵后，我们需要在vertex shader中接收对应的矩阵，并完成矩阵的计算：
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aTexCoord;
+
+out vec2 TexCoord;
+  
+uniform mat4 transform;
+
+void main()
+{
+    gl_Position = transform * vec4(aPos, 1.0f);
+    TexCoord = vec2(aTexCoord.x, aTexCoord.y);
+} 
+```
+
+---
+
+### Coordinate Systems
+
+此前，我们讨论过，OpenGL只会渲染NDC范围内的顶点，而超出该范围的顶点是不可见的，会被OpenGL丢弃或裁剪掉。但我们在场景中的模型的顶点通常都是定义在模型空间中的，所以我们需要在vertex shader中将这些顶点变换到NDC空间下。最后，光栅化器会将NDC坐标转换到屏幕上的2D像素。
+
+接下来我们将探讨将坐标从模型空间一步步变换到NDC空间的过程。之所以我们要将这个过程分为几个中间步骤，是因为有些计算适合在特定空间中进行计算。
+
+在OpenGL中，总共有五个不同的坐标系统：
+
+- 模型空间
+- 世界空间
+- 观察空间
+- 裁剪空间
+- 屏幕空间
+
+#### The Global picture
