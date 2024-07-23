@@ -3,6 +3,7 @@ title: Getting Started
 date: 2024-07-17 05:46 +0800
 categories: [Graphics, Learn OpenGL]
 media_subpath: /assets/img/Graphics/LearnOpenGL/
+math: true
 ---
 
 ### Hello Window
@@ -1018,4 +1019,172 @@ void main()
 - 裁剪空间
 - 屏幕空间
 
-#### The Global picture
+#### Local space
+
+也称为物体空间（Object Space），是定义物体顶点坐标的初始空间。这是物体自身的坐标系，所有的顶点坐标都是相对于物体的原点。
+
+#### World space
+
+世界空间是一个全局坐标系，其中所有的物体都被放置在一个共同的参考框架内。通过模型变换（Model Transformation），将物体从本地空间转换到世界空间。这一步通常涉及平移、旋转和缩放。
+
+#### View space
+
+也称为相机空间（Camera Space）或眼睛空间（Eye Space）。视图空间是从相机视角来看世界的坐标系。通过视图变换（View Transformation），将物体从世界空间转换到视图空间。视图变换矩阵通常通过定义相机的位置、目标点和上方向来计算。
+
+#### Clip space
+
+通过投影变换（Projection Transformation），将物体从视图空间转换到裁剪空间，同时坐标也会变成齐次坐标。同时，投影变换会定义一个视锥体view frustum。视锥体的边界就是裁剪空间的范围，通常来说，裁剪空间的范围应该是[-1, 1]，但是这样相对来说没有那么直观，我们可以自行指定一个范围（由投影矩阵决定），然后再映射到NDC中。
+
+投影变换可以是透视投影或正交投影。
+
+##### Orthographic projection
+
+正交投影矩阵定义了一个立方体样式的视锥体。使用正交投影矩阵需要我们指定宽、高、以及远近平面之间的距离。我们可以通过GLM的内置函数glm::ortho来创建一个正交投影矩阵：
+
+```c++
+glm::ortho(0.0f, 800.0f, 0.0f, 600.0f, 0.1f, 100.0f);
+```
+
+这些参数分别表示：宽、高、裁截面。
+
+##### Perspective projection
+
+透视投影符合现实世界中的视觉效果。透视投影矩阵会将给定的视锥体范围映射到裁剪空间中，通过也会控制坐标的w分量，使得坐标距离相机越远，w分量的值越大。当坐标被变换到裁剪空间时，会位于[-w, w]的范围内。
+
+我们可以通过GLM的内置函数来创建透视投影矩阵：
+
+```c++
+glm::mat proj = glm::perspective(glm::radians(45.0f), (float)width/(float)height, 0.1f, 100.0f);
+```
+
+#### NDC space
+
+在经过模型变换、视图变换和投影变换后，顶点坐标位于裁剪空间。这些坐标是齐次坐标形式 。当顶点从裁剪空间变换到NDC空间时，OpenGL会执行透视除法，从而将坐标标准化为NDC范围[-1, 1]。视锥体裁剪检查顶点是否在这个范围内，超出范围的顶点会被剔除。
+
+透视除法会在vertex shader后自动执行。
+
+#### Putting it all together
+
+我们将前面所提到的矩阵合并为一个单一的变换，也就是：
+
+
+$$
+V_{clip}=M_{projection}\cdot M_{view} \cdot M_{model} \cdot V_{local}
+$$
+
+
+#### Going 3D
+
+现在有了基础知识，我们可以试着渲染一个三维物体，也就是一个二维平面。我们需要分别构建出MVP矩阵，然后传递给vertex shader实现变换。
+
+当构建矩阵时，我们需要确保矩阵都被初始化为identity矩阵：
+
+```c++
+glm::mat4 model = glm::mat4(1.0f);
+glm::mat4 view = glm::mat4(1.0f);
+glm::mat4 projection = glm::mat4(1.0f);
+```
+
+模型矩阵包含了物体的平移、旋转、缩放。在我们的例子中，我们想让物体旋转一定角度
+
+```c++
+model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f)); 
+```
+
+接下来我们构建view矩阵。由于目前我们的物体和相机都在世界原点，为了能够看到物体，我们可以将相机向后一定角度。需要注意的是，OpenGL基于右手坐标系，相机指向-Z方向，所以相机向后移动也就是相机沿着+Z方向移动。但是，我们是对于场景中的物体进行矩阵变换，而非相机，所以我们可以这样想：将相机向后移动，也就是将场景中所有的物体向前移动。具体的细节我们会在后面讨论，现在对于我们的例子来说，view矩阵的构建如下：
+
+```c++
+view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f)); 
+```
+
+最后是透视投影矩阵：
+
+```c++
+projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+```
+
+vertex shader需要接收三个矩阵，并计算变换后的坐标：
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+...
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+void main()
+{
+    // note that we read the multiplication from right to left
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    ...
+}
+```
+
+向GPU传递矩阵也很简单，以模型矩阵为例：
+
+```c++
+int modelLoc = glGetUniformLocation(ourShader.ID, "model");
+glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+// or use utility function from shader.h
+ourShader.setMat4("model", model);
+```
+
+实际上，投影矩阵通常来说不会改变，我们可以只向GPU传递一次投影矩阵，而在render loop中每帧传递模型与观察矩阵。
+
+#### More 3D
+
+接下来，我们来渲染一个立方体，而非此前的二维平面。渲染立方体总共需要36个顶点。
+
+同时，我们可以让立方体不停旋转：
+
+```c++
+model = glm::rotate(model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));  
+```
+
+由于我们所使用的顶点数据没有顶点索引，所以我们通过`glDrawArrays`绘制。我们查看渲染结果，会得到奇怪的效果，有些本应该在最上面的面却在下面。这是因为OpenGL是逐片段完成绘制的，默认情况下，会覆些掉已经绘制过的片段。
+
+所以，为了解决这个问题，我们应该在绘制时结合深度信息，从而帮助OpenGL判断什么时候需要覆写一个像素而什么时候不需要。OpenGL提供了Zbuffer来完成深度测试。
+
+OpenGL将深度信息存储在zbuffer中。GLFW会为我们自动创建好zbuffer。每个片段都有一个深度值，也就是片段的z值，当OpenGL想要输出一个片段的颜色值，会将当前片段的深度值与zbuffer中的深度值进行比较，如果当前的片段会出现在其他片段的后面，则当前片段被丢弃，否则就会刷新对应的深度值。这个过程被称为深度测试，由OpenGL自动完成。
+
+但是默认情况下，OpenGL不会开启深度测试，所以我们需要手动启用：
+
+```c++
+glEnable(GL_DEPTH_TEST);
+```
+
+同时，我们还需要在每帧开始时清除上一帧的zbuffer值：
+
+```c++
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+```
+
+---
+
+### Camera
+
+在本节中，我们将实现一个漫游相机。
+
+之前我们提到过View space是从相机视角来看世界的坐标系。要定义出view space，就需要明确相机的位置、观察方向、指向相机上方和右方的向量。实际上，我们是要以相机位置为中心，三个相互垂直的向量为基，实现一个坐标系。
+
+相机的位置很好定义：
+
+```cpp
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+```
+
+对于相机的观察方向，我们可以先确定一个相机的观察位置，然后通过向量减法并归一化来计算出相机的观察方向。这里有一点需要注意，我们是用观察点减去相机的位置，所以我们得到的方向向量是指向相机的+Z方向。这样做的原因是我们希望Z轴的坐标值是正数：
+
+```cpp
+glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 cameraDirection = glm::normalize(cameraPos - cameraTarget);
+```
+
+相机的右向量和上向量可以通过cross product计算得到：
+
+```c++
+glm::vec3 cameraRight = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), cameraDIrection));
+glm::vec3 cameraUp = glm::cross(cameraDirection, cameraRight);
+```
+

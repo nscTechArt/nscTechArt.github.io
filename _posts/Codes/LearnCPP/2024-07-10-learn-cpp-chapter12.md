@@ -1649,3 +1649,192 @@ int main()
 - 例如，`auto* q = p;`会将`q`的类型推导为指向`p`所指向类型的指针。
 
 ---
+
+### 12.5  std::optional
+
+首先我们考虑下面这个函数：
+
+```c++
+int doubleDivision(int x, int y)
+{
+	return x / y;
+}
+```
+
+如果在函数调用时，我们传递了在语法上错误的参数，如`y = 0`，那么函数就无法计算要返回的值。要如何处理这种情况呢？ 此时，我们应该让函数检测错误，然后将错误返回给函数调用。
+
+此前，我们接触到了两种让函数将错误返回给函数调用的方法：
+
+- 如果函数本来返回void，则修改为返回布尔值
+- 如果函数本来返回一个值，则修改函数，使得当错误发生时，返回一个本不可能返回的值。我们将这个值称为Sentinel Value。
+
+下面是一个第二种方法的例子：
+
+```c++
+#include <iostream>
+
+double reciprocal(double x)
+{
+    if (x == 0.0)
+        return 0.0; // return 0.0 as a sentinel to indicate an error occurred
+    return 1.0 / x;
+}
+
+void testReciprocal(double d)
+{
+     double result { reciprocal(d) };
+     std::cout << "The reciprocal of " << d << " is ";
+     if (result != 0.0)
+         std::cout << result << '\n';
+     else
+         std::cout << "undefined\n";
+}
+
+int main()
+{
+    testReciprocal(5.0);
+    testReciprocal(-4.0);
+    testReciprocal(0.0);
+}
+```
+
+这种解决方案看似有效，但是存在一些潜在的问题：
+
+- 开发者必须知道用于表示函数发生错误的sentinel value。
+- 同一个函数的不同版本也可能会有不同的sentinel value。
+- 这种方法不适用于所有sentinel value都是函数合理的返回值的情况。
+
+比方说，对于前面所提到的函数`doIntDivision()`，显然我们不能使用0，因为0除以任意值都会得到0。事实上，我们可以返回的值没有任何不能自然发生的。那我们要如何解决呢？
+
+首先，我们或许可以选择一些不常见的返回值作为sentinel value，例如：
+
+```c++
+#include <limits>
+
+int doIntDivision(int x, int y)
+{
+    if (y == 0)
+        return std::numeric_limits<int>::lowest();
+    return x / y;
+}
+```
+
+这种方法是有效的，但是仍有两个主要的缺点：
+
+- 每次调用函数时，我们都需要将函数的返回值与`std::numeric_limits<int>::lowest()`进行对比，这种的做法相对冗长且不美观
+- 如果在某个特定情况下，函数调用为`doIntDivision(std::numeric_limits<int>::lowest(), 1)`，那么我们就无法得知函数是否有错误。
+
+#### Returning a `std::optional`
+
+`std::optional` 是 C++17 标准库中引入的一个模板类，用于表示一个可能包含值也可能不包含值的对象。它在处理函数可能不返回有效值的情况下特别有用，可以避免使用指针或特殊返回值（如`nullptr` 或错误代码）。
+
+比如下面这个例子：
+
+```c++
+#include <iostream>
+#include <optional>
+
+std::optional<int> dotIntDivision(int x, int y)
+{
+    if (y == 0)
+        return {}; // or return std::nullopt
+    return x / y;
+}
+
+int main()
+{
+    std::optional<int> result {dotIntDivision(20, 5)};
+    if (result) // if the functino return a value
+        std::cout << "Result is " << *result << '\n'; // get the value
+    else
+        std::cout << "Result failed" << '\n';
+}
+```
+
+使用`std::optional`是很简单的，我们可以构建一个带有值或者不带有值的`std::optional<T>`：
+
+```c++
+std::optional<int> o1 { 5 };            // initialize with a value
+std::optional<int> o2 {};               // initialize with no value
+std::optional<int> o3 { std::nullopt }; // initialize with no value
+```
+
+判断一个`std::optional`是否有值的方法是：
+
+```c++
+if (o1, has_value())
+// or
+if (o2)
+```
+
+获取`std::optional`的值的方法可以选择下面任意一种：
+
+```c++
+std::cout << *o1;
+std::cout << o2.value();
+std::cout << o3.value_or(42); // 如果o3有值，则返回其值，否则返回42
+```
+
+需要注意的是，std::optional的使用语法本质上与指针相同。
+
+#### Cons of returning a `std::optional`
+
+虽然`std::optional`提供了一些便利，但是也有缺点：
+
+- 在获取`std::optional`的值之前，我们需要确保`std::optional`是包含值的，否则会导致未被定义的行为
+- `std::optional`不能提供为什么函数会失败的相关信息。
+
+#### Using std::optional as an optional function parameter
+
+此前，我们提到过可以通过指针来允许函数接收一个可选的实参，也就是：
+
+```c++
+#include <iostream>
+
+void printIDNumber(const int *id=nullptr)
+{
+    if (id)
+        std::cout << "Your ID number is " << *id << ".\n";
+    else
+        std::cout << "Your ID number is not known.\n";
+}
+
+int main()
+{
+    printIDNumber(); // we don't know the user's ID yet
+
+    int userid { 34 };
+    printIDNumber(&userid); // we know the user's ID now
+}
+```
+
+我们也可以用`std::optional`表示一个可选的参数：
+
+```c++
+#include <iostream>
+#include <optional>
+
+void printIDNumber(std::optional<const int> id = std::nullopt)
+{
+    if (id)
+        std::cout << "Your ID number is " << *id << ".\n";
+    else
+        std::cout << "Your ID number is not known.\n";
+}
+
+int main()
+{
+    printIDNumber(); // we don't know the user's ID yet
+
+    int userid { 34 };
+    printIDNumber(userid); // we know the user's ID now
+
+    printIDNumber(62); // we can also pass an rvalue
+}
+```
+
+使用`std::optional`来表示可选的参数具有两个优势：
+
+- 明确表明了该参数是可选的
+- 可以传递右值，因为`std::optional`会拷贝参数
+
