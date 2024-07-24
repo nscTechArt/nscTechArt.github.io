@@ -1,5 +1,5 @@
 ---
-title: Getting Started
+title: Learn OpenGL Getting Started
 date: 2024-07-17 05:46 +0800
 categories: [Graphics, Learn OpenGL]
 media_subpath: /assets/img/Graphics/LearnOpenGL/
@@ -1174,7 +1174,7 @@ glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 ```
 
-对于相机的观察方向，我们可以先确定一个相机的观察位置，然后通过向量减法并归一化来计算出相机的观察方向。这里有一点需要注意，我们是用观察点减去相机的位置，所以我们得到的方向向量是指向相机的+Z方向。这样做的原因是我们希望Z轴的坐标值是正数：
+对于相机的观察方向，我们可以先确定一个相机的观察位置，然后通过向量减法并归一化来计算出相机的观察方向。这里有一点需要注意，我们是用观察点减去相机的位置，实际上就是对相机的观察方向取反。这样做的目的确保在相机坐标系中，观察方向是沿着负z轴方向。
 
 ```cpp
 glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -1188,3 +1188,44 @@ glm::vec3 cameraRight = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), c
 glm::vec3 cameraUp = glm::cross(cameraDirection, cameraRight);
 ```
 
+有了这些向量，我们就可以构建出相机的LookAt矩阵了。
+
+#### LookAt
+
+通过定义一个新的坐标空间（即相机空间），你可以使用一个包含三个正交轴和一个平移向量的矩阵将任意向量变换到这个新坐标空间中。这正是LookAt矩阵的作用。现在我们已知相机的观察方向、右向量和上向量，还已知相机的位置，就可以构建出lookat矩阵，通过将任何世界坐标中的向量与lookat矩阵相乘，我们可以将其转换到View space中。
+
+LookAt矩阵由两部分组成：
+
+- **旋转矩阵**：定义相机的方向，即相机的右向量、上向量和前向量
+- **平移矩阵**：定义相机的位置，即相机在世界坐标系中的位置
+
+即：
+$$
+LookAt = \begin{bmatrix} \color{red}{R_x} & \color{red}{R_y} & \color{red}{R_z} & 0 \\ \color{green}{U_x} & \color{green}{U_y} & \color{green}{U_z} & 0 \\ \color{blue}{D_x} & \color{blue}{D_y} & \color{blue}{D_z} & 0 \\ 0 & 0 & 0  & 1 \end{bmatrix} * \begin{bmatrix} 1 & 0 & 0 & -\color{purple}{P_x} \\ 0 & 1 & 0 & -\color{purple}{P_y} \\ 0 & 0 & 1 & -\color{purple}{P_z} \\ 0 & 0 & 0  & 1 \end{bmatrix}
+$$
+
+
+其中，$\color{red}R$代表右向量，$\color{green}U$代表上向量，$\color{blue}D$代表观察方向，$\color{purple}P$代表相机位置向量。
+
+GLM为我们提供了一个用于构建LookAt函数的矩阵：
+
+```c++
+glm::mat4 view;
+view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), 
+  		   glm::vec3(0.0f, 0.0f, 0.0f), 
+  		   glm::vec3(0.0f, 1.0f, 0.0f));
+```
+
+其中三个参数分别为相机的位置，看向的目标位置，以及一个世界空间中的上向量。
+
+#### Look around
+
+为了能够环绕查看场景，我们需要根据鼠标的输入来调整`cameraFront`，具体的机制需要一点理论知识
+
+##### Euler angles
+
+欧拉角是可以表示三维空间中任意旋转的三个值，分别是pitch、yaw、roll。下图展示了三个值分别的含义：
+
+![](camera_pitch_yaw_roll.png)
+
+对于我们的OpenGL程序来说，我们只关注pitch和yaw。给定pitch和yaw，我们可以将其转换为表示方向的一个三维向量。
