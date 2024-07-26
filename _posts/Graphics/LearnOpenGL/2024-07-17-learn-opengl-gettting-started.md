@@ -1,5 +1,5 @@
 ---
-title: Learn OpenGL Getting Started
+title: Getting Started
 date: 2024-07-17 05:46 +0800
 categories: [Graphics, Learn OpenGL]
 media_subpath: /assets/img/Graphics/LearnOpenGL/
@@ -1220,12 +1220,3 @@ view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f),
 
 #### Look around
 
-为了能够环绕查看场景，我们需要根据鼠标的输入来调整`cameraFront`，具体的机制需要一点理论知识
-
-##### Euler angles
-
-欧拉角是可以表示三维空间中任意旋转的三个值，分别是pitch、yaw、roll。下图展示了三个值分别的含义：
-
-![](camera_pitch_yaw_roll.png)
-
-对于我们的OpenGL程序来说，我们只关注pitch和yaw。给定pitch和yaw，我们可以将其转换为表示方向的一个三维向量。
