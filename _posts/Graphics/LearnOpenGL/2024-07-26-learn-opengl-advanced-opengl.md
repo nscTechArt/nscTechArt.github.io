@@ -362,7 +362,297 @@ glm::mat4 view = glm::mat4(glm::mat3(camera.GetViewMatrix()));
 
 最后，在绘制天空盒时，我们需要将深度测试函数设置为`glDepthFunc(GL_LEQUAL)`，因为天空盒会将depth buffer的值刷新为1，如果使用OpenGL默认的`glDepthFunc(GL_LESS)`，则天空盒就无法通过深度测试了。
 
-#### Environment mapping
+---
 
-##### Reflection
+### Advanced Data
+
+#### glBufferSubData
+
+`glBufferSubData` 是 OpenGL 中的一个函数，用于更新已经存在的缓冲区对象的一部分数据。它的主要作用是在不重新分配整个缓冲区的情况下更新缓冲区的一部分数据，这对于性能优化非常重要。函数原型为：
+
+```c++
+void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void *data);
+```
+
+其中：
+
+- `target`: 指定要更新的缓冲区对象的目标。常见的值包括 `GL_ARRAY_BUFFER`、`GL_ELEMENT_ARRAY_BUFFER` 等。
+- `offset`: 指定要更新的数据在缓冲区中的起始位置，以字节为单位。
+- `size`: 指定要更新的数据的大小，以字节为单位。
+- `data`: 指向包含新数据的内存指针。
+
+使用`glBufferSubData`有额外几点需要我们注意：
+
+- `glBufferSubData`无法改变buffer的大小，只能更新已有的内容。
+- 更新的范围不能超出buffer的边界，否则会导致未定义的行为
+
+#### glMapBuffer
+
+`glMapBuffer` 是 OpenGL 中用于将缓冲区对象的内容映射到客户端地址空间的函数。这允许直接访问缓冲区对象的内存，从而进行读写操作。使用 `glMapBuffer` 可以更高效地更新缓冲区数据，尤其是当需要频繁更新或读取数据时函数原型为：
+
+```c++
+void* glMapBuffer(GLenum target, GLenum access);
+```
+
+其中：
+
+- `target`: 指定要映射的缓冲区对象的目标。常见的值包括 `GL_ARRAY_BUFFER`、`GL_ELEMENT_ARRAY_BUFFER` 等。
+
+- `access`: 指定访问权限。可以是以下值之一：
+
+  - `GL_READ_ONLY`: 只读访问。
+
+  - `GL_WRITE_ONLY`: 只写访问。
+
+  - `GL_READ_WRITE`: 读写访问。
+
+同时，调用 `glUnmapBuffer` 是必要的，如果在未解除映射的情况下再次映射缓冲区，可能会导致错误。
+
+#### Batching vertex attributes
+
+目前为止，我们所使用的vertex data一直采用了interleaved的方式，即把每个顶点的位置、法线、纹理坐标等顶点属性并排放在内存中。现在我们对于OpenGL中的buffer有了更深入的了解，所以我们可以使用其他组织形式的vertex data了。
+
+我们可以根据不同类型的顶点属性，将vertex data打包起来。换句话说，interleaved的模式中，vertex data是123123123的形式，而batched模型中，则采用了111222332的形式。
+
+在OpenGL程序中，我们分别提供顶点的位置数组，法线数组、纹理数组等，然后通过函数`glBufferSubData`向GPU传递vertex data。如下所示：
+
+```c++
+float positions[] = {...};
+float normals[] = {...};
+float tex[] = {...};
+// fill buffer
+glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(positions), &positions);
+glBufferSubData(GL_ARRAY_BUFFER, sizeof(positions), sizeof(normals), &normals);
+glBufferSubData(GL_ARRAY_BUFFER, sizeof(positions) + sizeof(normals), sizeof(tex), &tex);
+```
+
+在batched形式下，我们还需要调整配置顶点属性的方法：
+
+```c++
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);  
+glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)(sizeof(positions)));  
+glVertexAttribPointer(
+  2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)(sizeof(positions) + sizeof(normals)));  
+```
+
+我们可以注意到，此时步长的大小为当前一个顶点属性的长度
+
+#### Copying buffers
+
+某些情况下，当我们填充完一个buffer后，还需要将该buffer中的数据拷贝到其他buffer中使用，这种情况下，我们可以使用函数`glCopyBufferSubData`，该函数用于在两个buffer对象之间拷贝数据，从而避免我们将数据传递到CPU内存中再回传到GPU中。函数原型为：
+
+```c++
+void glCopyBufferSubData(GLenum readTarget, GLenum writeTarget, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size);
+```
+
+其中：
+
+- `readTarget`：源缓冲区的目标类型。常见的值包括 `GL_ARRAY_BUFFER`、`GL_ELEMENT_ARRAY_BUFFER` 等。
+- `writeTarget`：目标缓冲区的目标类型。值类似于 `readTarget`。
+- `readOffset`：源缓冲区的偏移量，以字节为单位，从这个位置开始复制数据。
+- `writeOffset`：目标缓冲区的偏移量，以字节为单位，从这个位置开始写入数据。
+- `size`：要复制的数据大小，以字节为单位。
+
+在调用该函数之前，`readTarget`和`writeTarget`必须分别绑定到 `GL_COPY_READ_BUFFER` 和 `GL_COPY_WRITE_BUFFER`。
+
+---
+
+### Advanced GLSL
+
+#### Interface Blocks
+
+目前为止，当我们从vertex shader中向fragment shader中传递数据时，我们都需要分别在vertex shader和fragment shader中声明若干个命名匹配的变量。如果数据过多，则维护起来会很麻烦。
+
+GLSL为我们提供了名为interface blocks的结构，可以帮助我们更好地组织变量。它的声明与结构体类似，只是额外需要`in`和`out`关键字，用于表明该block用于输入还是输出。
+
+#### Uniform Buffer Objects
+
+shader中除了普通变量，还可能使用了大量的uniform变量。如果我们的OpenGL程序中使用了多个shader，则我们需要为每个shader分别传递uniform变量的值，尽管它们对于很多shader都是一样的，比如投影和观察矩阵，或者场景中的光源信息等。
+
+为此，OpenGL提供了uniform buffer对象，它用于存储和管理统一变量，提供了一种高效的方式来在多个着色器程序之间共享统一变量数据，避免为每个shader程序单独设置uniform变量。
+
+绝大多数情况下，场景中所有的shader程序所使用的`project`和`view`矩阵都是一样的，所以是使用uniform buffer对象的绝佳例子。我们在vertex shader中创建一个uniform block，用于存储`projection`和`view`矩阵：
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+layout (std140) uniform Matrices
+{
+    mat4 projection;
+    mat4 view;
+};
+
+uniform mat4 model;
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+}  
+```
+
+我们将这两个矩阵的值存储在OpenGL代码中的某个buffer上，所有声明了这个uniform block的shader都可以直接使用这两个矩阵。
+
+#### Uniform buffer layout
+
+**由于 UBO 是一块保留的全局 GPU 内存，而这块内存本身只是原始的内存块，并不包含有关数据类型的信息。也就是说，当我们创建和填充UBO时，我们只是将原始数据放入了这块内存中。为了让 OpenGL 正确地解释和使用这块内存中的数据，我们需要明确指定这块内存的布局方式，即哪些字节对应着哪些统一变量。通过这种方式，OpenGL 能够正确地将 UBO 中的数据映射到着色器中的统一变量。**
+
+我们考虑下面的这个uniform block：
+
+```glsl
+layout (std140) uniform ExampleBlock
+{
+    float value;
+    vec3 vector;
+    mat4 matrix;
+    float values[3];
+    bool boolean;
+    int integer;
+};
+```
+
+我们需要了解uniform block中每个变量的大小（以字节为单位）和相对于块起始位置的偏移量，以便在buffer中按顺序正确地放置它们。**尽管 OpenGL 明确规定了每种数据类型的大小，但它并未明确规定变量之间的间距。也就是说，硬件可能会在某些情况下在变量之间添加额外的字节，以满足对齐要求。例如，硬件可能会将 `vec3` 填充为包含 4 个浮点数的数组，然后再追加一个 `float` 变量。**根据需要自行决定变量的位置或填充，这对硬件来说是一个很好的特性，但对开发者而言可能会带来额外的复杂性。
+
+在GLSL中，默认的uniform变量的内存布局是*shared*布局，之所以称为共享布局，是因为一旦硬件定义了uniform变量的偏移量，这些偏移量在多个shader程序之间是一直的。在共享布局中，只要uniform变量的顺序保持不变，GLSL就可以出于优化的目的而重新定位uniform变量，也就是说，硬件可以根据其特定的需求来调整变量的位置，以提高访问效率或其他性能指标。因为硬件可以重新定位变量，所以我们在编写应用程序时并不知道每个uniform变量的具体偏移量。这导致我们无法直接且准确地填充UBO，因为我们不知道uniform变量在缓冲区中的确切位置。为了知道每个uniform变量的偏移量，我们可以使用像 `glGetUniformIndices` 这样的 OpenGL 函数来查询这些信息。但是，我们可以使用更简单易用的方法：使用**std140**布局。
+
+`std140` 是 OpenGL 中一种用于定义Uniform Block内存布局的标准。它确保了在不同平台和实现中，统一块内的数据排列方式是一致的，从而保证了数据访问的正确性和性能。
+
+std140中有两个关键概念，**基础对齐base alignment**和**对齐偏移量alignment offset**。每个变量都有一个基础对齐，这个对齐等于在uniform block中变量占用的空间（包括任何填充）。基础对齐的具体规则根据变量的类型而有所不同。
+
+- `float`、`int`、`uint`：4 字节
+- `vec2`：8 字节
+- `vec3`、`vec4`：16 字节
+- `mat2`：每列 8 字节，总共 16 字节
+- `mat3`：每列 16 字节，总共 48 字节
+- `mat4`：每列 16 字节，总共 64 字节
+- `array`：数组元素的对齐方式与单个元素相同，且每个元素占据的空间按 16 字节对齐
+- `struct`：结构体的对齐方式与其最大成员的对齐方式相同
+
+而变量的对齐偏移量是从统一块开始计算的变量字节偏移量。这个偏移量必须是变量基础对齐的倍数。为了满足变量的对齐要求，我们在计算偏移量时，需要考虑当前变量的大小和对齐要求，以确定下一个变量的起始位置。
+
+我们结合上面提到的例子来理解一下：
+
+```glsl
+layout (std140) uniform ExampleBlock
+{
+    float value;
+    vec3 vector;
+    mat4 matrix;
+    float values[3];
+    bool boolean;
+    int integer;
+};
+```
+
+- `float value`
+   - 基础对齐：4字节
+   - 偏移量：0
+   - 下一个变量可以放置的内存位置：0 + 4 = 4
+- `vec3 vector`
+   - 基础对齐：16字节
+   - 偏移量：4 + 12 = 16（由于vec3的对齐是16字节，所以需要再float value后插入12个字节的填充）
+   - 下一个变量可以放置的内存位置：16 + 16 = 32
+- `mat4 matrix`
+   - 基础对齐：16 x 4 = 64字节 （每列16字节，总共4列）
+   - 偏移量：32
+   - 下一个变量可以放置的内存位置：32 + 64 = 96
+- `float values[3]`
+  - 基础对齐：16字节（数组元素按16字节对齐）
+  - 偏移量：96
+  - 下一个变量可以放置的内存位置：96 + 16 * 3 = 144
+- `bool boolean`
+  - 基础对齐：4字节
+  - 偏移量：144
+  - 下一个变量可以放置的内存位置：144 + 4 = 148
+- `int integer`
+  - 基础对齐：4字节
+  - 偏移量：148
+  - 下一个变量可以放置的内存位置：148 + 4 = 152
+
+所以，我们的ExampleBlock的内存格式如下所示：
+
+```c++
+layout (std140) uniform ExampleBlock
+{
+                     // base alignment  // aligned offset
+    float value;     // 4               // 0 
+    vec3 vector;     // 16              // 16  (offset must be multiple of 16 so 4->16)
+    mat4 matrix;     // 16              // 32  (column 0)
+                     // 16              // 48  (column 1)
+                     // 16              // 64  (column 2)
+                     // 16              // 80  (column 3)
+    float values[3]; // 16              // 96  (values[0])
+                     // 16              // 112 (values[1])
+                     // 16              // 128 (values[2])
+    bool boolean;    // 4               // 144
+    int integer;     // 4               // 148
+}; 
+```
+
+#### Using uniform buffers
+
+现在，我们可以总结一下OpenGL中使用UBO的步骤
+
+首先，在shader中定义一个uniform block，包含所需要的uniform变量，例如：
+
+```c++
+#version 330 core
+
+layout(std140) uniform MyUniformBlock {
+    mat4 model;
+    mat4 view;
+    mat4 projection;
+    vec4 lightPosition;
+};
+
+void main() 
+{
+    // make use of these uniform variables
+}
+```
+
+然后在OpenGL程序中，获取这个uniform block在shader中的索引，实际上就是为了让OpenGL程序在CPU端知道这个uniform block在GPU上的位置：
+
+```c++
+unsigned int uniformBlockIndex = glGetUniformBlockIndex(shaderProgram, "MyUniformBlock");
+```
+
+接下来，我们为该uniform block设置一个绑定点，它用于将UBO和shader中的uniform block链接在一起，通过这种方式，我们可以在多个着色器程序之间共享uniform buffer data。如下图所示：
+
+![](advanced_glsl_binding_points.png)
+
+```c++
+unsigned int bindingPoint = 0;
+glUniformBlockBinding(shaderProgram, uniformBlockIndex, bindingPoint);
+```
+
+下面我们就可以进行创建、绑定、分配内存了：
+
+```c++
+unsigned int ubo;
+glGenBuffers(1, &ubo);
+glBindBuffers(GL_UNIFORM_BUFFER, ubo);
+glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformBlockData), nullptr, GL_STATIC_DRAW);
+glBindBuffers(GL_UNIFORM_BUFFER, 0);
+```
+
+其中，`sizeof(UniformBlockData)`需要我们根据std140布局进行计算。
+
+配置好UBO后，我们需要将UBO绑定到之前设置的绑定点上。在这里，我们有两个选择，一个是绑定整个缓冲区对象到一个绑定点的`glBindBufferBase`，另一个是绑定缓冲区对象的一个指定范围到一个绑定点的`glBindBufferRange`。选择哪个函数取决于我们是否需要绑定整个uniform buffer还是只是其中一部分。如果你只需要绑定缓冲区的一部分，例如在大缓冲区中只使用一个子集的数据，那么使用`glBindBufferRange`会更加合适；否则，使用`glBindBufferBase`更为简单和直接。
+
+```c++
+glBindBufferBase(GL_UNIFORM_BUFFER, bindingPoint, ubo); 
+// or 只将缓冲区对象的前两个mat4矩阵（例如，模型矩阵和视图矩阵）绑定到绑定点0
+glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, 2 * sizeof(glm::mat4));
+```
+
+同时，我们还需要知道，不管是`glBindBufferBase`还是`glBindBufferRange`，绑定点的绑定不依赖于当前绑定的缓冲区对象，而是直接将指定的uniform buffer对象绑定到指定的绑定点。所以，即使我们通过`glBindBuffer(GL_UNIFORM_BUFFER, 0);` 取消了当前的绑定状态，也不会影响绑定点的绑定。
+
+当我们需要更新uniform block中的变量值时，我们只需要绑定UBO，然后调用`glBufferSubData`进行更新即可：
+
+```c++
+glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(UniformBlockData), &data);
+glBindBuffer(GL_UNIFORM_BUFFER, 0);
+```
 
