@@ -6,6 +6,10 @@ media_subpath: /assets/img/Graphics/MySoftRasterizer/
 math: true
 ---
 
+在[**上一篇博客**](https://lovewithyou.tech/posts/computing-pixel-coordinates-of-a-3d-point/)中，我们大致了解了三角形顶点从世界空间变换到像素坐标的过程。这一篇博客是更进一步的拓展，我们将会研究基于物理的针孔相机模型在顶点坐标变换中的影响。
+
+我们先来看看针孔相机的原理。
+
 ### How a Pinhole Camera Works
 
 在相机中，**胶片的尺寸**与**光圈到image plane的距离**对相机的成像有着至关重要的作用。在本篇博客中，我们将会讨论这两个因素对于图像质量的影响，并且会整合到我们的虚拟相机模型中。
