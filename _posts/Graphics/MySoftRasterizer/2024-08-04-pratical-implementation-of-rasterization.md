@@ -1,5 +1,5 @@
 ---
-title: Perspective Correct Interpolation and Vertex Attributes
+title: Pratical Implement 
 date: 2024-08-04 23:59 +0800
 categories: [Graphics, Build A Soft Rasterizer]
 media_subpath: /assets/img/Graphics/MySoftRasterizer/
@@ -42,3 +42,6 @@ w0_new - w0 = s * (b[1] - a[1]);
 w0_new = w0 + w0_step;
 ```
 
+---
+
+![](vertex-transform-pipeline.png)

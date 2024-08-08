@@ -617,3 +617,286 @@ int main()
 ---
 
 ### 13.5 Introduction to overloading the I/O operators
+
+此前，我们使用了一个函数，用于将枚举转换为对应的字符串：
+
+```c++
+#include <iostream>
+#include <string_view>
+
+enum Colors
+{
+    red, blue, yellow,
+};
+
+constexpr std::string_view printColors(Colors color)
+{
+    switch (color)
+    {
+        case red : return "red";
+        case blue : return "blue";
+        case yellow : return "yellow";
+        default: return "???";
+    }
+}
+
+int main()
+{
+    constexpr Colors shirt{red};
+
+    std::cout << printColors(shirt) << '\n';
+}
+```
+
+但是这样的实现方法是有缺点的：
+
+- 在输出时，我们需要记住用于转换枚举数函数的命名，在我们的例子中，是`printColors`
+- 在`cout`中调用函数不够简洁
+
+#### Introduction to operator overloading
+
+之前，我们学习过函数重载，在C++中，我们同样可以重载运算符，实现的步骤如下：
+
+1. 用运算符作为函数的命名，定义一个新的函数
+2. 为运算符的运算数添加合适的形参，其中一个形参必须要用户自定义的类型，否则无法通过编译
+3. 根据需要设置返回类型
+4. 通过返回语句，返回所需要的运算结果
+
+#### Overloading `operator<<` to print an enumerator
+
+现在，我们实现一个运算符重载，使得`<<`能够输出枚举数。但是在实现之前，我们先来了解一下`<<`的使用机制。
+
+我们考虑这样一个简单的表达式`std::cout << 5`。其中`std::cout`的类型是`std::ostream`，这是在标准库中用户定义类型，`5`的类型是`int`
+
+当编译开始后，编译器会尝试寻找重载的`operator<<`函数，且该函数的返回类型为`std::ostream`，实参类型为`int`。随后编译器会在标准库中找到这样的重载函数，接着编译器会对该函数进行调用。
+
+有了一定的理解后，我们就可以尝试实现我们自己的重载了。
+
+```c++
+#include <iostream>
+#include <string_view>
+
+enum Colors
+{
+    red, blue, yellow,
+};
+
+constexpr std::string_view printColors(Colors color)
+{
+    switch (color)
+    {
+    case red : return "red";
+    case blue : return "blue";
+    case yellow : return "yellow";
+    default: return "???";
+    }
+}
+
+std::ostream& operator<< (std::ostream& cout, Colors color)
+{
+    cout <<  printColors(color);
+    return cout;
+}
+
+int main()
+{
+    constexpr Colors shirt{red};
+    std::cout << shirt;
+}
+```
+
+#### Overloading `operator>>` to input an enumerator
+
+下面这个例子中，我们重载了运算符>>用于输入一个枚举数。
+
+```c++
+#include <iostream>
+#include <optional>
+
+enum Color
+{
+    red, green, blue,
+};
+
+std::string_view getColorName(Color color)
+{
+    switch (color)
+    {
+    case red:   return "red";
+    case green: return "green";
+    case blue:  return "blue";
+    }
+    return "Unknown Color";
+}
+
+std::optional<Color> getColorFromString(std::string_view sv)
+{
+    if (sv == "red") return red;
+    if (sv == "green") return green;
+    if (sv == "blue") return blue;
+    return {};
+}
+
+std::ostream& operator<< (std::ostream& out, Color color)
+{
+    out << getColorName(color);
+    return out;
+}
+
+std::istream& operator>> (std::istream& in, Color& color)
+{
+    std::string s;
+    in >> s;
+
+    std::optional colorMatched = getColorFromString(s);
+    if (colorMatched)
+    {
+        color = *colorMatched;
+        return in;
+    }
+
+    in.setstate(std::ios::failbit);
+    return in;
+}
+
+int main()
+{
+    Color color{};
+    std::cout << "Pick a Color: red, green, or blue" << '\n';
+    std::cin >> color;
+    if (std::cin) std::cout << color;
+    else
+    {
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        std::cout << "No matching color\n";
+    }
+}
+```
+
+---
+
+### 13.6 Scoped enumerations  (enum classes)
+
+现在我们已经对unscoped枚举有了一些了解，unscoped枚举具有下面这些缺点：
+
+- **命名冲突**。unscoped枚举的枚举成员在其声明的作用域中没有封装，会造成命名空间污染的问题，有可能与其他标识符冲突，例如：
+
+  ```c++
+  enum Colors { RED, GREEN, BLUE };
+  enum TrafficLights { RED, YELLOW, GREEN }; // 与Colors中的RED和GREEN冲突
+  ```
+
+- **类型不安全**：Unscoped 枚举的枚举成员隐式转换为整型，这可能导致意外的类型不匹配和错误。例如：
+
+  ```c++
+  enum Colors { RED, GREEN, BLUE };
+  int color = RED; // 隐式转换为int
+  ```
+
+故C++还提供了另一种枚举类型，也就是有作用域的枚举，也被称为enum class。scoped枚举与unscoped枚举有两个主要区别：
+
+- 不会将枚举成员隐式地转换为整数值
+- 枚举成员的作用域仅限于在枚举类型内，而不会与其他枚举类型或变量冲突。
+
+下面一个scoped枚举类型的例子：
+
+```c++
+enum class color 
+{
+	red, white, green, blue,
+};
+```
+
+由于scoped枚举的性质，当我们使用枚举成员时，需要通过枚举类型来访问枚举成员，如同命名空间一样：
+
+```c++
+int main()
+{
+    enum class color 
+    {
+        red, white, green, blue,
+    };
+    
+    Color color {Color::red};
+}
+```
+
+在scoped枚举类型中，虽然枚举成员不再会被隐式地转换为整数值，但是我们仍然可以比较同一个枚举类型中成员，例如：
+
+```c++
+#include <iostream>
+
+int main()
+{
+    enum class Color
+    {
+        red, white, green,
+    };
+
+    Color shirt = {Color::red};
+    if (shirt == Color::red) std::cout << "Cool\n";
+}
+```
+
+此外，我们也可以显式地转换枚举成员，例如：
+
+```c++
+std::cout << static_cast<int>(shirt);
+```
+
+而且，我们可以同样使用`static_cast`将枚举成员转换为整数值，这在处理输入问题中很有用：
+
+```c++
+#include <iostream>
+
+int main()
+{
+    enum class Color
+    {
+        red, white, green,
+    };
+
+    int input{};
+    std::cin >> input;
+    Color color{static_cast<Color>(input)};
+}
+```
+
+在C++17后，我们可以直接转换，而不是用`static_cast`：
+
+```c++
+Color color{1};
+```
+
+C++23提供了另一种方法，使用std::to_underlying将枚举成员转换为枚举类型的底层类型对应的值：
+
+```c++
+std::cout << std::to_underlying(color) << '\n';
+```
+
+#### Easing the conversion of scoped enumerators to integers (advanced)
+
+在scoped枚举类型中，虽然枚举成员不再会被隐式地转换为整数值，但是有些情况下，频繁使用`static_cast`进行显示转换也会带来某些不便，一种解决方法是重载运算符来执行转换：
+
+```c++
+#include <iostream>
+
+enum class Color
+{
+    red, yellow, blue, green,
+};
+
+constexpr auto operator+(Color color) noexcept
+{
+    return static_cast<std::underlying_type_t<Color>>(color);
+}
+
+int main()
+{
+    std::cout << +Color::green << '\n';
+}
+```
+
+---
+
