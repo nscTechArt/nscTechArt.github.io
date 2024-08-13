@@ -34,4 +34,11 @@ $$
 
 ![](depth-interpolation1.png)
 
-那我们应该如何计算深度值呢？答案是使用深度值的倒数进行插值。
+那我们应该如何计算深度值呢？答案是使用深度值的倒数进行插值，也就是：
+
+
+$$
+\dfrac{1}{P.z} = \dfrac{1}{V0.z} \cdot \lambda_0 + \dfrac{1}{V1.z} \cdot \lambda_1 + \dfrac{1}{V2.z} \cdot \lambda_2.
+$$
+
+

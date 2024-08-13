@@ -900,3 +900,27 @@ int main()
 
 ---
 
+### 13.7 Introduction to structs, members, and member selection
+
+结构体的定义如下：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+```
+
+基础用法很简单，这里就不讨论了
+
+---
+
+### 13.8 Struct aggregate initialization
+
+默认情况下，结构体的成员变量是未被初始化的。
+
+#### What is an aggregate
+
+在计算机程序中，聚合数据类型指的是是由多个元素组成的数据类型，这些元素可以是不同类型的变量，但作为一个整体可以被看作一个单一的实体。在C++和其他一些编程语言中，聚合数据类型通常包括结构体（`struct`）、数组、类（`class`）等。

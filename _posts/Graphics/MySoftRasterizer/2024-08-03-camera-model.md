@@ -265,7 +265,7 @@ bool computePixelCoordinates(
     return visible;
 }
 ```
-{ add-lines:"4-8, 16, 17, 20, 21, 26"}
+{:  add-lines:"4-8, 16, 17, 20, 21, 26"}
 
 #### When Resolution Gate and Film Gate Ratios Don't Match
 

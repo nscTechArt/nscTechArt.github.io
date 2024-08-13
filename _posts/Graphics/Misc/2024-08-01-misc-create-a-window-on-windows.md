@@ -357,3 +357,40 @@ int main()
     }
 }
 ```
+
+---
+
+### 补充
+
+#### 自定义背景颜色
+
+使用`WNDCLASSEXW`结构体创建窗口时，我们可以通过设置`bhrBackground`成员来定义窗口的背景刷（背景颜色或图案）。有三种设置的方式
+
+1. **使用系统颜色：**
+
+   你可以使用 `COLOR_*` 常量来设置背景刷，这些常量表示系统默认的颜色。例如，`COLOR_WINDOW` 表示窗口的默认背景色（通常是白色）。
+
+   ```c++
+   windowClass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+   ```
+
+2. **使用实心颜色刷：**
+
+   使用函数`CreateSolidBrush`创建实心颜色刷。需要在不用时释放内存
+
+   ```c++
+   HBRUSH hBrush = CreateSolidBrush(RGB(255, 0, 0)); // 红色
+   windowClass.hbrBackground = hBrush;
+   ```
+
+3. **使用模式刷：**
+
+   使用`CreatePatternBrush` 函数加载位图，作为背景的填充图案。
+
+   ```c++
+   HBITMAP hBitmap = LoadBitmap(hInstance, MAKEINTRESOURCE(IDB_BITMAP1)); // 自定义位图
+   HBRUSH hBrush = CreatePatternBrush(hBitmap);
+   windowClass.hbrBackground = hBrush;
+   ```
+
+需要注意的是，后两种方法需要我们在不需要释放内存，可以定义在析构函数中。

@@ -6,6 +6,8 @@ media_subpath: /assets/img/Graphics/MySoftRasterizer/
 math: true
 ---
 
+> 本篇博客以[这篇博客](https://www.scratchapixel.com/lessons/3d-basic-rendering/computing-pixel-coordinates-of-3d-point/perspective-projection.html)为基础
+
 在计算机图形学中，变换实际上是对物体的顶点所在的坐标系进行操作，而不是直接操作物体本身。
 
 ### From  Local Space to World Space
@@ -113,7 +115,7 @@ $$
 
 如果投影点是可见的，则该投影点最终会作为一个像素显示在图像中。像素与投影点一样，但不同的是，处于屏幕坐标空间中的投影点的坐标值是浮点数，而像素坐标值是整数，并且像素所在坐标空间是以图像的左上角为原点，X轴指向右方，Y轴指向下方。我们将像素所处的坐标系称为栅格空间raster space，像素在该坐标系下是一个单位大小的正方形。我们将由投影点变换到像素的过程称为screen space到raster space。那具体是怎么实现的呢？
 
-首先我们要做的是将投影点坐标映射到$[0, 1]$d的范围上，这一步很简单，因为画布的宽高是已知的，我们可以通过下面这个式子完成映射：
+首先我们要做的是将投影点坐标映射到$[0, 1]$的范围上，这一步很简单，因为画布的宽高是已知的，我们可以通过下面这个式子完成映射：
 
 
 $$
