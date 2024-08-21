@@ -923,4 +923,356 @@ struct Employee
 
 #### What is an aggregate
 
-在计算机程序中，聚合数据类型指的是是由多个元素组成的数据类型，这些元素可以是不同类型的变量，但作为一个整体可以被看作一个单一的实体。在C++和其他一些编程语言中，聚合数据类型通常包括结构体（`struct`）、数组、类（`class`）等。
+在计算机程序中，聚合数据类型指的是是由多个元素组成的数据类型，这些元素可以是不同类型的变量，但作为一个整体可以被看作一个单一的实体。
+
+在C++中，aggregate聚合体要么是一个C风格的数组，要么是一个符合以下要求的类类型，包括结构体、类、联合体：
+
+- 没有用户定义的构造函数
+- 没有虚函数
+- 没有`private`或`protected`的非静态成员变量
+
+我们可以在[**这里**](https://en.cppreference.com/w/cpp/language/aggregate_initialization)看到更全面的概念定义。
+
+#### Aggregate initialization of a struct
+
+对于聚合体的初始化，主要使用下面两种形式：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee frank = {1, 32, 6000.0}; // copy list initialization
+    Employee tom {2, 28, 4500.0};     // list initialization
+}
+```
+
+其中，初始化列表中值的顺序与聚合体中变量的声明顺序一致。
+
+> 优先使用非拷贝的初始化方式
+{: prompts-tip} 
+
+#### Missing initializers in an initialzer list
+
+如果初始化列表中的值的数量小于成员变量的数量，则剩余的成员都会默认使用空值初始化列表，还是使用上面的例子：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee joe { 2, 28 }; // joe.wage will be value-initialized to 0.0
+}
+```
+
+#### **Overloading** `operator<<` to print a struct
+
+此前，我们已经了解过如何对运算符`<<`重载，以实现输出枚举数的功能，对于结构体来说，我们同样可以重载输入输出运算符：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+std::ostream& operator<<(std::ostream& out, const Employee& employee)
+{
+    out << "id: " << employee.id << " age: " << employee.age << " wage: " << employee.wage;
+    return out;
+}
+
+int main()
+{
+    Employee frank = {1, 32, 6000.0};
+    std::cout << frank << '\n';
+}
+```
+
+---
+
+### 13.9 Default member initialization
+
+略
+
+---
+
+### 13.10 Passsing and returning structs
+
+略
+
+---
+
+### 13.11 Struct miscellany
+
+#### Structs with program-defined members
+
+在C++中，结构体和类可以有program-defined的类型的成员，具体则有两种实现方式。
+
+首先，我们可以在全局上定义一个program-defined类型，然后在另一个program-defined类型的变量中包含该类型：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+struct Company
+{
+    int numberOfEmployees {};
+    Employee ceo {};
+};
+```
+
+或者我们直接以内嵌的形式定义：
+
+```c++
+struct Company
+{
+    struct Employee
+    {
+        int id {};
+        int age {};
+        double wage {};
+    };
+
+    int numberOfEmployees {};
+    Employee ceo {};
+};
+```
+
+第二种更加常见。
+
+#### Structs that are owners should have data members that are owners
+
+C++中有两种相对的概念：owner与viewer。owner管理自己的数据，并且掌控数据何时被销毁，而viewer则观察他人的数据，无法掌握数据的改变与销毁。
+
+大多数情况下，我们希望结构体和类是他们所包含的数据的owner，这样做可以带来两点好处：
+
+- 成员数据与结构体和类的生命周期相同
+- 成员数据的值不会意外改变
+
+想要实现作为owner的结构体和类，最简单的方法是给每个成员数据一个owner类型，即非viewer、指针、或引用。
+
+我们以下面这个程序为例：
+
+```c++
+#include <iostream>
+#include <ostream>
+#include <string>
+
+struct Owner
+{
+    std::string name {}; // owner
+};
+
+struct Viewer
+{
+    std::string_view name {}; // viewer
+};
+
+std::string getName()
+{
+    std::cout << "Enter a name: ";
+    std::string name {};
+    std::cin >> name;
+    return name;
+}
+
+int main()
+{
+    Owner o {getName()};
+    std::cout << "Owner name is " << o.name << '\n';
+
+    Viewer v {getName()};
+    std::cout << "Viewer name is " << v.name << '\n';
+}
+
+```
+
+函数`getName`会返回一个临时变量`std::string`，此变量在函数调用的表达式结束后就会被销毁。对于Owner结构体来说，`std::string`是一个owner，所以`o.name`对生成一个`std::string`的拷贝。当`std::string`被销毁时，`o.name`也不会受到任何影响。
+
+#### Struct size and data structure alignment
+
+通常来说，结构体的大小等于成员变量的大小的总和，但是也并非总是如此。我们看下面这个例子：
+
+```c++
+struct Foo
+{
+    short a {};
+    int b {};
+    double c {};
+};
+
+int main()
+{
+    std::cout << sizeof(short) << ' ' << sizeof(int) << ' ' << sizeof(double) << '\n';
+    std::cout << sizeof(Foo) << '\n';
+}
+```
+
+在我们的设备上，运行结果为：
+
+```c++
+2 4 8
+16
+```
+
+所以，对于大小问题，我们可以得出的结论是，结构体的大小会永远大于等于成员变量的大小之和。这是因为：
+
+- **对齐要求**：编译器会根据目标平台的对齐要求在结构体的成员变量之间插入填充（padding）字节，以确保每个成员变量的地址符合对齐要求。这样做可以提高访问内存的效率。例如，如果某个成员变量需要对齐到4字节边界，但它前面的成员占用了3个字节，那么编译器可能会在这个成员变量前插入1个字节的填充。
+- **尾部填充：**结构体的大小也可能会因为整个结构体需要满足特定的对齐要求而增加额外的填充字节。例如，如果结构体中最大的成员需要对齐到4字节边界，那么整个结构体的大小可能会被填充到4的倍数。
+
+在我们的例子中，编译器会隐式地在成员`a`后面填充两个字节
+
+考虑到这一点，我们有必要留意结构体的成员变量的声明顺序，**通过合理地排列成员变量的顺序，可以减少填充字节，从而优化结构体或类的内存占用**。合理的顺序主要指的是，优先声明对齐要求较大的成员，如`double`和`int`，然后再声明对齐要求较小的成员，如`char`和`bool`。此外，还应该尽可能将大小相同的成员放在一起。
+
+例如：
+
+```c++
+struct Foo1
+{
+    short a{}; // will have 2 bytes of padding after a
+    int b{};
+    short c{}; // will have 2 bytes of padding after c
+};
+
+struct Foo2
+{
+    int b{};
+    short a{};
+    short c{};
+};
+```
+
+---
+
+### 13.12 Member selection with pointers and references
+
+#### Member selection for structs and references to structs
+
+我们知道，我们可以使用成员选择运算符`.`从一个结构体对象中选择一个成员，例如：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee tom {1, 25, 10000.0};
+    tom.age++;
+    std::cout << tom.age << '\n';
+}
+```
+
+同时，我们知道一个对象的引用本质上就是对象本身，所以对于一个结构体的引用，我们同样可以使用成员选择运算符`.`：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+void printEmployeeAge(const Employee& e)
+{
+    std::cout << e.age << '\n';
+}
+
+int main()
+{
+    Employee tom {1, 25, 10000.0};
+    tom.age++;
+    printEmployeeAge(tom);
+}
+```
+
+#### Member selection for pointer to structs
+
+但是，成员选择运算符`.`却无法直接用于一个结构体的指针，如果我们运行下面这段程序，将无法通过编译：
+
+```c++
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee tom {1, 25, 10000.0};
+    tom.age++;
+
+    Employee* ptr {&tom};
+    ptr.age++;    
+}
+```
+
+这是因为，指针实际上保存的是地址，想要选择指针所指向的结构体的成员，我们首先需要对指针进行解引用，所以，我们可以这样修改：
+
+```c++
+Employee* ptr {&tom};
+std::cout << (*ptr).age << '\n';
+```
+
+但是在这样的写法中，我们需要用括号包围住解引用，从而确保它的优先级高于成员选择运算符，过于繁琐。
+
+所以C++为我们提供了从指针从选择成员的运算符`->`，所以，我们可以直接这样获取指针指向的结构体的成员：
+
+```c++
+Employee* ptr {&tom};
+std::cout << ptr->age << '\n';
+```
+
+#### Chaining `operator->`
+
+如果我们使用->访问的成员本身是一个指向其他结构体或类的指针，则我们可以再次使用->来访问该成员指向的结构体或类的成员，例如：
+
+```c++
+struct Point
+{
+    double x {};
+    double y {};
+};
+
+struct Triangle
+{
+    Point* a {};
+    Point* b {};
+    Point* c {};
+};
+
+int main()
+{
+    Point a {-1, 1};
+    Point b {1, 1};
+    Point c {0, 2};
+    Triangle tri {&a, &b, &c};
+    Triangle *ptr {&tri};
+
+    std::cout << ptr->a->x << '\n';
+}
+```
+
+---
+
+### 13.13 Class templates
