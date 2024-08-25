@@ -1276,3 +1276,48 @@ int main()
 ---
 
 ### 13.13 Class templates
+
+此前，我们使用了函数模板，使得编译器能够根据所需要的类型实例出正常的函数。而当我们使用聚合体（结构体、类、联合体、数组）时，也会遇到类似的问题。但是聚合体无法使用重载，所以我们需要引入类模板。
+
+如果不使用模板类，这样的代码是无法通过编译的：
+
+```c++
+struct Pair
+{
+    int first{};
+    int second{};
+};
+
+struct Pair // compile error: erroneous redefinition of Pair
+{
+    double first{};
+    double second{};
+};
+```
+
+使用模板类是这样：
+
+```c++
+template <typename T>
+struct Pair
+{
+    T first {};
+    T second {};
+};
+
+int main()
+{
+    Pair<int> p1 {5, 6};
+}
+```
+
+---
+
+### 13.14 Class template argument deduction and deduction guides
+
+从C++17开始，编译器能够从对象的初始化值的类型中推导模板类的类型。例如：
+
+```c++
+std::pair p2{ 1, 2 }; 
+```
+
