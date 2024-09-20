@@ -2,7 +2,7 @@
 title: 使用Assimp导入模型
 date: 2024-09-20 10:15 +0800
 categories: [Engine, Evnia Engine Developing]
-media_subpath: /assets/img/Engine/envia/
+media_subpath: /assets/img/Engine/evnia/
 math: false
 ---
 
@@ -16,7 +16,7 @@ Assimp是一个3D项目中常用的第三方模型导入库，支持数十种不
 
 一个简化的Assimp数据结构示意如下所示：
 
-![](assimp_structure.png)
+![](assimpClasses.jpg)
 
 我们再根据这个示意图简单拆解一下：
 
