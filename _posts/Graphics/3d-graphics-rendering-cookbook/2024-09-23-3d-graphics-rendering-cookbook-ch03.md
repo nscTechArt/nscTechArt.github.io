@@ -328,8 +328,151 @@ cubemap包含了六张二维纹理，这些纹理分别代表cube的一个面。
 
 5. 然后我们就可以将原hdr图片从全景转换为竖直方向的十字形式了，我们可以将它也保存为一个hdr格式的图片，以便于我们在应用程序之外检查：
 
-   ```
-   
+   ```c++
+   Bitmap verticalCross = convertEquirectangularMapToVerticalCross(bitmapIn);
+   stbi_write_hdr(
+       "hdrToCheck.hdr", verticalCross.mWidth, verticalCross.mHeight,
+       verticalCross.mChannels, (const float*)verticalCross.mData.data());
    ```
 
+6. 切分竖直方向的十字形式的hdr图，并且遍历所有面，并根据深度值传递像素数据：
+
+   ```c++
+   Bitmap cubemap = convertVerticalCrossToCubeMapFaces(verticalCross);
    
+   glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &cubemapHandle);
+   glTextureParameteri(cubemapHandle, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+   glTextureParameteri(cubemapHandle, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+   glTextureParameteri(cubemapHandle, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+   glTextureParameteri(cubemapHandle, GL_TEXTURE_BASE_LEVEL, 0);
+   glTextureParameteri(cubemapHandle, GL_TEXTURE_MAX_LEVEL, 0);
+   glTextureParameteri(cubemapHandle, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+   glTextureParameteri(cubemapHandle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+   glTextureStorage2D(cubemapHandle, 1, GL_RGB32F, cubemap.mWidth, cubemap.mHeight);
+   const uint8_t* data = cubemap.mData.data();
+   
+   for (unsigned i = 0; i < 6; i++)
+   {
+       glTextureSubImage3D(
+           cubemapHandle, 0, 0, 0, i,
+           cubemap.mWidth, cubemap.mHeight, 1, GL_RGB, GL_FLOAT, data);
+       data += cubemap.mWidth * cubemap.mHeight * cubemap.mChannels * Bitmap::getBytePerChannel(cubemap.mFormat);
+   }
+   glBindTextures(1, 1, &cubemapHandle);
+   ```
+
+#### There's more...
+
+现代图形API可以支持在所有面之间无缝过滤立方体贴图，在OpenGL中，对应的API是`glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS)`
+
+此外，还可以使用ARB_seamless_cubemap_per_texture扩展对单独的立方体贴图进行控制：
+
+```c++
+glTextureParameteri(texture, GL_TEXTURE_CUBE_MAP_SEAMLESS, GL_TRUE);
+```
+
+在vulkan中，默认会将所有立方体贴图处理为无缝的。
+
+---
+
+### Compiling Vulkan shaders at runtime
+
+在本小节中，我们会创建我们的第一个vulkan应用。首先，我们需要了解一下SPIR-V，它代表Standard Portable Intermediate Representation (Version)，是一种基于二进制的可移植的中间表示。由于SRIP-V是提前编译的，从而能够减少运行时着色器的编译时间，提升性能。在本系列博客中，我们使用[***glslang***](https://github.com/KhronosGroup/glslang)作为着色器编译工具。
+
+#### How to do it...
+
+用glslang编译着色器的步骤如下：
+
+1. 首先，我们定义一个如下结构体：
+
+   ```c++
+   struct ShaderModule
+   {
+       std::vector<unsigned int> SRIRV;
+       VkShaderModule shaderModule = nullptr;
+   };
+   ```
+
+2. 实现一个helper函数，用于将对应特定管线阶段的GLSL着色器编译为SPIR-V，并存储在`shaderModule`结构体中。
+
+   ```c++
+   size_t compileShader(glslang_stage_t stage, const char* shaderSource, ShaderModule& shaderModule)
+   {
+       const glslang_input_t input =
+       {
+           .language = GLSLANG_SOURCE_GLSL,
+           .stage = stage,
+           .client = GLSLANG_CLIENT_VULKAN,
+           .client_version = GLSLANG_TARGET_VULKAN_1_1,
+           .target_language = GLSLANG_TARGET_SPV,
+           .target_language_version = GLSLANG_TARGET_SPV_1_3,
+           .code = shaderSource,
+           .default_version = 100,
+           .default_profile = GLSLANG_NO_PROFILE,
+           .force_default_version_and_profile = false,
+           .forward_compatible = false,
+           .messages = GLSLANG_MSG_DEFAULT_BIT,
+           .resource = glslang_default_resource()
+       };
+   
+       glslang_shader_t* shader = glslang_shader_create(&input);
+   
+       // first, the shader needs to be preprocessed by the compiler
+       // returns true if all the extensions, pragmas, and version strings mentioned
+       // in the shader source code are valid:
+       // --------------------------------------------------------------------------
+       if (!glslang_shader_preprocess(shader, &input))
+       {
+           fprintf(stderr, "GLSL preprocessing failed\n");
+           fprintf(stderr, "\n%s", glslang_shader_get_info_log(shader));
+           fprintf(stderr, "\n%s", glslang_shader_get_info_debug_log(shader));
+           printShaderSource(input.code);
+           return 0;
+       }
+   
+       // then, the shader gets parsed in an internal parse tree
+       // representation inside the compiler
+       // ------------------------------------------------------
+       if (!glslang_shader_parse(shader, &input))
+       {
+           fprintf(stderr, "GLSL parsing failed\n");
+           fprintf(stderr, "\n%s", glslang_shader_get_info_log(shader));
+           fprintf(stderr, "\n%s", glslang_shader_get_info_debug_log(shader));
+           printShaderSource(glslang_shader_get_preprocessed_code(shader));
+           return 0;
+       }
+   
+       // next, we can link the shader to a program
+       // and proceed with the binary code generation stage:
+       // --------------------------------------------------
+       glslang_program_t* program = glslang_program_create();
+       glslang_program_add_shader(program, shader);
+       if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT | GLSLANG_MSG_VULKAN_RULES_BIT))
+       {
+           fprintf(stderr, "GLSL linking failed\n");
+   		fprintf(stderr, "\n%s", glslang_program_get_info_log(program));
+   		fprintf(stderr, "\n%s", glslang_program_get_info_debug_log(program));
+   		return 0;
+       }
+   
+       // generate some binary SPIR-V code and store it inside the shaderModule
+       // ---------------------------------------------------------------------
+       glslang_program_SPIRV_generate(program, stage);
+       shaderModule.SPIRV.resize(glslang_program_SPIRV_get_size(program));
+       const char* spirvMessages = glslang_program_SPIRV_get_messages(program);
+       if (spirvMessages) fprintf(stderr, "%s", spirvMessages);
+   
+       // clean up
+       // --------
+       glslang_program_delete(program);
+       glslang_shader_delete(shader);
+   
+       return shaderModule.SPIRV.size();
+   }
+   ```
+
+
+---
+
+### Initializing Vulkan instances and graphics devices
+
