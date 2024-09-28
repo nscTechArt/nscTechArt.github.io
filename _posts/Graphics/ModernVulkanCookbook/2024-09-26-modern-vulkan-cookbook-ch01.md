@@ -465,3 +465,569 @@ std::vector<PhysicalDevice>
 
 ---
 
+### Retrieving the queue object handle
+
+当我们创建好`VkDevice`对象后，我们还需要通过获取队列的句柄。当我们提交command buffer时，我们需要用到这个句柄。
+
+#### Getting ready
+
+在本系列博客中，所有获取的队列都会被存储在VulkanCore::Context类中，这个类会维护每种类型的队列，包括图形、计算、传递和稀疏，以及一个特殊的用于呈现的队列。
+
+#### How to do it...
+
+获取队列的句柄很简单，我们只需要传递队列族的索引和队列的索引即可
+
+```c++
+VkQueue queue {VK_NULL_HANDLE};
+vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
+```
+
+---
+
+### Creating a command pool
+
+在Vulkan中，command buffer是一个容器，包含了在GPU上执行的命令。所以，当我们想要记录命令时，我们需要分配一个command buffer，然后使用`vkCmd*`这一族函数将命令记录下来。当记录完成后，我们就可以将command buffer提交给命令队列执行。
+
+我们在本小节中会创建一个用于分配command buffer的命令池对象。该对象需要通过VkDevice对象创建，同时与一个特定的队列族相关联。
+
+#### Getting ready
+
+我们将命令池以及相应的分配与提交都封装在`VulkanCore::CommandQueueManager`这个类中。
+
+#### How to do it...
+
+创建命令池很简单，我们需要队列族索引与一个flags，在我们的案例中是`VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT`，表示从这个命令池中分配的每个command buffer都可能会通过`vkCmdBeginCommandBuffer`单独或隐式地调用
+
+```c++
+uint32_t queueFamilyIndex; // valiad queue family index
+const VkCommandPoolCreateInfo commandPoolInfo
+{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+    .queueFamilyIndex = queueFamilyIndex,
+};
+VkCommandPool commandPool {VK_NULL_HANDLE};
+VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
+```
+
+有了`VkCommandPool`后，我们就可以开始分配command buffer了
+
+---
+
+### Allocating, recording, and submitting commands
+
+我们先简单梳理一下使用command buffer的过程：
+
+1. 通过`vkAllocateCommandBuffers`从命令池中分配command buffer
+2. 在记录命令前，我们需要调用`vkBeginCommandBuffer`初始化command buffer
+3. 记录完成后，我们需要调用`vkEndCommandBuffer`，为提交command buffer做准备
+4. 通过`vkQueueSubmit`将该command buffer提交到设备中以执行
+
+在本小节中，我们将深入这一过程的细节
+
+#### Getting ready
+
+同样，所有相关的代码会实现在`VulkanCore::CommandQueueManager`这个类中。
+
+#### How to do it...
+
+1. 在调用`vkAllocateCommandBuffers`时，我们需要提供对应的命令池，要分配的buffer的数量，指向存储command buffer属性的结构体的指针
+
+   ```c++
+   const VkCommandBufferAllocateInfo commandBufferInfo = 
+   {
+       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+       .commandPool = commandPool,
+       // VK_COMMADN_BUFFER_LEVEL_PRIMARY表示该command buffer是主要的，可以直接提交给队列执行
+       // 与此相对的是次要的command buffer
+       .level = VK_COMMADN_BUFFER_LEVEL_PRIMARY,
+       .commandBufferCount = 1,
+   };
+   VkCommandBuffer commandBuffer {VK_NULL_HANDLE};
+   VK_CHECK(vkAllocateCommandBuffer(device, &commandBufferInfo, &commandBuffer));
+   ```
+
+2. 调用`vkBeginCommandBuffer`时，我们需要提供一个指定command buffer的记录属性的结构体的指针
+
+   ```c++
+   const VkCommandBufferBeginInfo info = 
+   {
+     	.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+       // 这个flag表示该command buffer只会被提交一次，在提交后可以自动被释放或重置，
+       // 有利于节省内存，提高性能
+       .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+   };
+   VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &info));
+   ```
+
+   现在，我们就可以记录command buffer了，我们列举了一些常用的可以被记录的命令
+
+   - `vkCmdBindPipeline`
+   - `vkCmdBindDescriptorSets`
+   - `vkCmdBindVertexBuffers`
+   - `vkCmdDraw`
+   - `vkCmdDispatch`
+   - `vkCmdCopyBuffer`
+   - `vkCmdImage`
+
+3. 记录完成后，我们调用`vkEndCommandBuffer`，为提交command buffer做准备：
+
+   ```c++
+   VK_CHECK(vkEndCommandBuffer(commandBuffer));
+   ```
+
+4. 最后，调用`vkQueueSubmit`提交command buffer
+
+   ```c++
+   VkDevice device; // valiad device
+   VkQueue queue; // valiad queue
+   VkFence fence {VK_NULL_HANDLE};
+   const VkFenceCreateInfo fenceInfo = 
+   {
+       .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+       .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+   };
+   VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &fence));
+   
+   const VkSubmitInfo submitInfo = 
+   {
+       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+       .commandBufferCount = 1,
+       .pCommandBuffers = commandBuffer,
+   };
+   
+   VK_CHECK(vkQueueuSubmit(queue, 1, submitInfo, fence));
+   ```
+
+在前面的代码中，我们使用到了`VkFence`，这是一个特定的Vulkan对象，用于实现GPU与CPU之间的同步。之所以用到`VkFence`，是因为`VkQueueSubmit`是一个异步的操作，并且不会阻塞应用程序。所以，一旦一个command buffer提交后，我们只能通过检查`VkFence`对象的状态来判断执行的情况。我们会在后面进一步了解Vulkan中的同步与异步。
+
+---
+
+### Reusing command buffers
+
+command buffer可以在提交后重置，也可以记录一次，然后多次提交。我们将在本小节中了解如何重复使用command buffer。
+
+#### How to do it...
+
+我们分两种方法讨论
+
+**创建一个command buffer并不限期地重复使用**。在这种情况中，一旦我们提交了command buffer，我们就需要等待它被处理完成，然后才能开始记录新的命令。而判断处理完成的方法是检查与其关联的`VkFence`的状态
+
+   ```c++
+   VkDevice device; // valiad device
+   VK_CHECK(vkWaitForFences(device, 1, &fences, true, UINT32_MAX));
+   VK_CHECK(vkResetFences(device, 1, &fences));
+   ```
+
+下图演示了我们上述的这种方式，也就是创建一个command buffer，然后一直使用它记录命令并提交。可以从图中看到，如果我们不对同步进行干预，就可能导致GPU还在执行的过程中时，CPU就开始记录新的命令，从而导致了竞争的情况。
+
+![](B18491_01_04.jpg)
+
+但是，这种情况可以通过使用`VkFence`得以避免。再重复使用一个command buffer之前，我们可以先检查与其关联的`VkFence`的状态，如下图所示：
+
+![](B18491_01_05.jpg)
+
+**按需分配command buffer**。这是最简单易行的方案，在这种情况下，我们需要在创建`VkCommandPool`时指定`VK_COMMAND_POOL_CREATE_TRANSIENT_BIT`这个标志。需要注意的是，在这种方案中，我们仍有可能需要使用一个关联的`VkFence`对象。
+
+在我们的应用程序中，我们可以限制command buffer数量，有助于减少程序占用的内存。
+
+---
+
+### Creating render passes
+
+在Vulkan中，render pass是用于描述渲染过程的核心概念，它定义了渲染中的各种阶段、使用的附件、以及这些附件在渲染过程中如何读取和写入。其中，附件是在render pass中作为渲染目标的图像的引用，它包括颜色附件、深度附加和模板附件。下图展示了render pass对象所包含的内容：
+
+![](B18491_01_06.jpg)
+
+如图所示，`VkAttachmentDescription`结构体用于创建`VkRenderPass`对象，它定义了附件的多种属性，其中`initialLayout`和`finalLayout`在render pass的执行过程对优化附件的使用和布局转换起着至关重要的作用。在转换图像布局时，合理的`initialLayout`和`finalLayout`能够避免使用额外的管线屏障。比方说，颜色附件的`initialLayout`为`VK_IMAGE_LAYOUT_UNDEFINED`，在render pass的最后，这个颜色附件的`finalLayout`应该被转换为`VK_IMAGE_LAYOUT_PRESENT_SRC_KHR`。
+
+每个Render Pass可以包含一个或多个子pass，子pass之间可以共享附件。子pass的设计允许在同一渲染过程内进行不同的渲染操作。
+
+子pass依赖关系描述了子pass之间的执行顺序以及相互之间的同步关系。
+
+在本小节中，我们将了解如何创建render pass
+
+#### Getting ready
+
+创建render pass并不复杂，但是需要我们提供大量信息。我们可以将这些信息封装在自己的类中，那么类的析构函数就会在适当时销毁对象，更容易管理
+
+我们将render pass封装在`VulkanCore::RenderPass`这个类中。
+
+#### How to do it...
+
+创建一个render  pass，我们需要提供在render pass中使用到的附件，以及对应的载入和存储操作，最终的布局。此外，render pass必须与某个类型的管线绑定，包括图形管线和计算管线等。这就是render pass类的构造函数所需要的全部参数。
+
+1. 构造函数会遍历所有的附件，为每个附件创建一个`VkAttachmentDescription`结构体。该结构体包含了附件的一些基本信息，也会记录每个附件的载入和存储操作。同时，我们还会额外创建两个变量，分别存储颜色附件的引用和深度/模板附件的引用。
+
+   ```c++
+   RenderPass::RenderPass(
+   	const Context& context,
+   	const std::vector<std::shared_ptr<Texture>> attachments,
+   	const std::vector<VkAttachmentLoadOp>& loadOp,
+       const std::vector<VkAttachmentStoreOp>& storeOp,
+       const std::vector<VkImageLayout>& layout,
+       VkPipelineBindPoint bindPoint,
+       const std::string& name = "")
+       : device(context.device)
+   {
+   	std::vector<VkAttachmentDescription> attachmentDescriptors;
+       std::vector<VkAttachmentReference> colorAttachmentReferences;
+       std::optional<VkAttachmentReference> depthStencilAttachmentReference;
+   }
+   ```
+
+2. 对于每个附件，我们创建一个`VkAttachmentDescription`结构体，并添加到`attachmentDescriptors`数组中
+
+   ```c++
+   for (uint32_t index = 0; index < attachments.size(); index++)
+   {
+       attachmentDescriptors.emplace_back(
+       	VkAttachmentDescription
+           {
+           	.format = attachment[index]->vkFormat(),
+               .samples = VK_SAMPLE_COUNT_1_BIT,
+               .loadOp = attachments[index].isStencil() ? 
+                   VK_ATTACHMENT_LOAD_OP_DONT_CARE : loadOp[index],
+               .storeOp = attachments[index].isStencil() ?
+                   VK_ATTACHMENT_STORE_OP_DONT_CARE : storeOp[index],
+               .stencilLoadOp = attachments[index].isStencil() ? 
+                   loadOp[index] : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+               .stencilStoreOp = attachments[index].isStencil() ? 
+                   storeOp[index] : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+               .initialLayout = attachments[index]->vkLayout(),
+               .finalLayout = layout[index].
+           });
+   }
+   ```
+
+3. 我们还需要判断附件的类型，是颜色附件还是深度/模板附件，我们需要创建对应的`VkAttachenmentReferece`结构体
+
+   ```c++
+   if (attachments[index]->isStencil() || attachments[index]->isDepth())
+   {
+       depthStencilAttachmentReference = VkAttachmentReference 
+       {
+           .attachment = index,
+           .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+       };
+   } 
+   else 
+   {
+       colorAttachmentReferences.emplace_back(
+       	VkAttachmentReference
+           {
+               .attachment = index,
+               .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+           };
+       )
+   }
+   ```
+
+4. 目前简单起见，我们只创建一个子pass，它需要需要颜色附件的引用，和深度/模板附件的引用
+
+   ```c++
+   const VkSubPassDescrioption spb = 
+   {
+       .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+       .colorAttachmentCount = static_cast<uint32_t>(colorAttachmentReferences.size()),
+       .pColorAttachments = colorAttachmentReferences.data(),
+       .pDepthStencilAttachment = depthStencilAttachmentReference.has_value() ? 
+           						&depthStencilAttachmentReference.value() : nullptr,
+   };
+   ```
+
+5. 因为只有一个子pass，它只能且必须依赖与一个外部的子pass
+
+   ```c++
+   const VkSubpassDependency subpassDependency= 
+   {
+   	.srcSubpass = VK_SUBPASS_EXTERNAL,
+   	.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+       				VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+       .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+       				VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+      	.dstAccesMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | 
+      					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+   };
+   ```
+
+6. 最终，所有的相关信心都会被存储到`VkRenderPassCreateInfo`中
+
+   ```c++
+   const VkRenderPassCreateInfo rpci =
+   {
+   	.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+   	.attachmentCount = static_cast<uint32_t>(attachmentDescriptors.size()),
+   	.pAttachments = attachmentDescritors.size(),
+   	.subpassCount = 1,
+   	.pSubpass = &spd,
+   	.dependencyCount = 1,
+   	.pDependencies = &subpassDependency,
+   };
+   
+   VK_CHECK(vkCreatRenderPass(device, &rpci, nullptr, &renderPass));
+   
+   context.setVkObjectname(renderPass, VK_OBJECT_TYPE_RENDER_PASS, "Render Pass:" + name);
+   ```
+
+7. 我们需要在类中的析构函数中，销毁render pass对象：
+
+   ```c++
+   RenderPass:~RenderPass()
+   {
+   	vkDestoryRenderPass(device, renderPass, nullptr);
+   }
+   ```
+
+总结一下，render pass存储了关于如何处理附件（loaded, cleared, stored）的信息，并描述了子pass中的依赖关系。此外，render  pass还描述了哪些是解析附件，这对于启用MSAA至关重要，我们会在后续的章节了解。
+
+---
+
+### Creating framebuffers
+
+帧缓存包含了render pass中使用的附件的实际引用，这些引用是以`VkImageViews`的形式提供的。
+
+#### Getting ready
+
+我们将Vulkan的帧缓存对象封装在`VulkanCore::Framebuffer`类中
+
+#### How to do it...
+
+```cpp
+uint32_t width, height; // width and height of attachments
+VkDevice device; // valid Vulkan device
+std::vector<VkImageView> imageViews; // valid image views
+const VkFramebufferCreateInfo framebufferCreateInfo = 
+{
+	.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+	.renderPass =  renderPass,
+	.attachmentCount = static_cast<uint32>(attachments.size()),
+	.pAttachments = imageViews.data(),
+	.width = attachments[0]->vkExtents().width(),
+	.height = attachments[0]->vkExtents().height(),
+	.layers = 1,
+};
+VK_CHECK(vkCreateFramebuffer(device, &framebufferCreateInfo, nullptr, &framebuffer));
+```
+
+创建帧缓存很简单。如果我们使用动态渲染，帧缓存也不再是严格必要的对象了。
+
+---
+
+### Creating image views
+
+在Vulkan中，我们通过`VkImageView`对象来指定图像应该被如何解释，以及图像如何被GPU访问。同时VkImageView定义了图像的格式、尺寸以及数据布局。
+
+通过`VkImageView`，我们可以以各种方式使用图像，比如作为渲染命令的来源或目标，或者是着色器中的纹理。
+
+#### Getting ready
+
+我们将image view封装在`VulkanCore::Texture`中
+
+#### How to do it...
+
+```cpp
+VkImage image; // valid VkImage
+const VkImageAspectFlags aspectMask = isDepth() ? 
+										VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+const VkImageViewCreateInfo imageViewInfo = 
+{
+	.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+	.image = image,
+	.viewType = viewType, 
+	.format = format,
+	.components = 
+	{
+		.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+		.g = VK_COMPONENT_SWIZZLE_IDENTITY,
+		.b = VK_COMPONENT_SWIZZLE_IDENTITY,
+		.a = VK_COMPONENT_SWIZZLE_IDENTITY,
+	},
+	.subsourceRange = 
+	{
+		.aspectMaks = aspectMask,
+		.baseMipLevle = 0,
+		.levelCount = numMipLevels,
+		.baseArrayLayer = 0,
+		.layerCount = layers,
+	}
+};
+
+VK_CHECK(vkCreateImageView(context.device(), &imageViewInfo, nullptr, &imageView));
+```
+
+值得一提的是，image view可以覆盖整个图像，囊括图像的mip levels与层级，也可以只包含一个元素（单个mip level和单个层），甚至可以只覆盖图像的一部分。
+
+---
+
+### The Vulkan graphics pipeline
+
+图形管线是一个至关重要的概念，它描述了Vulkan应用程序中渲染图形的过程。图形管线包含了一系列阶段，每个阶段都有一个特定的目标，最终将3D场景转换为屏幕上的渲染图像。
+
+下图展示了创建图形管线时可能需要填充的所有结构及其属性概览：
+
+![](B18491_01_07.jpg)
+
+#### How to do it...
+
+1. 在Vulkan中，图形管线基本上是不可改变状态的对象，一旦完成创建，只有在某些特定情况下才能修改。当然，也有一些管线属性是可以在运行时动态修改的，如视口和剪裁窗口，我们将其成为动态状态dynamic states
+2. 需要说明的是，在本系列播客中，我们不会讨论管线中vertex input这一阶段，因为我们会使用**Programable Vertex Pulling**方法，在顶点着色器阶段中获取索引与顶点。
+3. 同样，管线布局是用于描述着色器所使用的资源的预期布局的结构体，在PVP方法中，我们会使用默认的管线布局。
+
+---
+
+### Compiling shaders to SPIR-V
+
+在OpenGL中，我们在运行时将GLSL编译为二进制文件，而Vulkan仅支持一种名为SPIR-V的中间表示方法，这是一种跨平台的，低级的中间表示，可以从各种着色器语言中生成。
+
+在本小节中，我们将学习如何使用glslang库将GLSL编译为SPIR-V
+
+#### Getting ready
+
+[KhronosGroup/glslang: Khronos-reference front end for GLSL/ESSL, partial front end for HLSL, and a SPIR-V generator. (github.com)](https://github.com/KhronosGroup/glslang)
+
+在我们的系列博客中，我们实现了一个`VulkanCore::ShaderModule`类，用于封装shader。该类包含了`ShaderModule::glslToSpirv`方法，用于把GLSL编译为SPIR-V
+
+#### How to do it...
+
+我们来看一下函数`ShaderModule::glslToSpirv`的大致实现过程
+
+1. 调用`glslang::InitializeProcess()`初始化glslang库，我们可以使用一个静态布尔变量判断是否是初始化已完成
+
+   ```c++
+   std::vector<char> ShaderModule::glslToSpirv(
+   	const std::vector<char>& data,
+   	EShLanguage shaderStage,
+   	const std::string& shaderDir,
+   	const char* entryPoint)
+   {
+   	static bool glslangInitialized = false;
+       if (!glslangInitialized)
+       {
+           glslang::InitializeProcess();
+           glslangInitialized = true;
+       }
+   }
+   ```
+
+2. `TShader`对象通过一个函数实例化，包含了生成SPIR-V所需要的着色器以及其他各种参数，包括输入客户端的版本，GLSL的版本，和shader的entry point
+
+   ```c++
+   glslang::TShader tShader(shaderStage);
+   const char* glslCStr = data.data();
+   tShader.setCStrings(&glslCStr, 1);
+   glslang::EshTargetClientVersion clientVersion = glslang::EShTargetVulkan_1_3;
+   glslang::EShTargetLanguageVersion langVersion = glslang::EShTargetSpv_1_3;
+   tShader.setEnvInput(glslang::EShSourceGlsl, shaderStage, glslang::EShClientVulkan, 460);
+   tshader.setEnvClient(glslang::EShClientVulkan, clientVersion);
+   tshader.setEnvTarget(glslang::EShTargetSpv, langVersion);
+   tshader.setSourceEntryPoint(entryPoint);
+   ```
+
+3. 然后，我们收集系统中关于shader通常可用的资源限制，如纹理或顶点属性的最大数量，并确定编译器应该呈现的信息。最后，我们将shader编译到SPIRV并验证：
+
+   ```c++
+   const TBuildInResource* resources = GetDefaultResources();
+   const EShMessages messages = static_cast<EShMessages>(
+   								EShMsgDefault | EShEShMsgSpvRules | EShMsgVulkanRules |
+       							EShMsgDebugInfo | EShMsgReadHlsl);
+   CustomInclude include
+   ```
+
+...这一部分先忽略吧，与Vulkan API整体关联性不大
+
+---
+
+### Dynamic states
+
+前面我们提到，Vulkan中的图形管线整体是上不可变的，但是也存在一些在绘制时可变的对象，例如视口和剪裁矩形，线宽，混合常数，模版参考值等。
+
+在不使用动态状态的情况下，我们的应用程序有如下几种选择：
+
+1. 在应用程序启动时创建管线
+2. 利用管线缓存
+
+#### How to do it...
+
+为了使用使用动态的参数，我们需要创建一个`VkPipelineDynamicStateCreateInfo`结构体实例，我们以视口为例：
+
+```c++
+const std::array<VkDynamicStatic, 1> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT };
+const VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = 
+{
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+    .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+    .pDynamicStates = dynamicStates.data(),
+};
+```
+
+当我们创建图形管线时，我们需要将这个创建的实例提供给`VkGraphiscPipelineCreateInfo`
+
+
+---
+### Creating a graphics pipeline
+
+创建图像管线的过程很浅显易懂，我们只需要将所有需要的信息填充到`VkGraphicsPipelineCreateInfo`这个结构体中，然后调用`vkCreateGraphicsPipelines`即可。
+
+我们将相关的代码都封装在`VulkanCore::Pipeline`类中，具体的代码就不再展示了
+
+---
+
+### Swapchain
+
+Vulkan中的交换链对应了OpenGL中双重缓冲与三重缓冲的功能，它是一个与surface对象相关联的图像的集合。在Vulkan中，用于创建和管理交换链的函数属于`VK_KHR_swapchain`扩展的一部分。
+
+交换链中图像的数量必须在构建时确定，并且数量也需要在`minImageCount`和`maxImageCount`这两个值构成的区间中，这两个值可以从物理设备中的`VkSurfaceCapabilitiesKHR`中获取。
+
+#### Getting ready
+
+我们通过`VulkanCore::Swapchain`这个类来管理交换链
+
+#### How to do it...
+
+交换链扩展提供了一系列函数和类型，用于创建、管理和销毁交换链。 其中一些关键函数和类型如下：
+
+1. `vkCreateSwapchainKHR`：用于创建`VkSwapchain`对象，需要提供`VkSwapchainCreateInfoKHR`这个结构体，它包含了关于surface的一些细节，如图像的数量、格式、尺寸、用法标志和一些其他的交换链属性
+2. `vkGetSwapchainImagesKHR`：在创建完交换链后，我们需要用此函数获取交换链中的图像的句柄，然后我们就可以为这些图像创建`VkImageView`和`VkFramebuffer`了
+3. `vkAcquireNextImageKHR`：用于从交换链中获取一个用于渲染的可用的图像。在调用此函数时，我们需要提供一个semaphore或fence，用于表示该图像已经准备好用于渲染
+4. `vkQueuePresentKHR`：当渲染完成后，我们可以用此函数将图像提交到显示设备上呈现
+5. `vkDestroySwapchainKHR`：负责销毁交换链，以及与其关联的资源
+
+---
+
+### Understanding synchronization in the swapchain
+
+应用程序和GPU进程是并行运行的。此外，除非我们指定，GPU上的command buffer以及命令也是并行运行的。为了能够确保CPU与GPU之间，以及GPU中正在被执行的command buffer之间的正确执行顺心，Vulkan提供了两种机制：**fence**和**semaphore**。前者用于同步GPU和CPU之间的工作，而后者则用于同步在GPU中执行的工作负载。
+
+在本小节中，我们将了解为什么我们需要这两个同步机制，如何以及何时使用它们。
+
+#### Getting ready
+
+semaphore的使用被封装在`VulkanCore::Swapchain`中，fence的使用被封装在`VulkanCore::CommandQueueManager`中
+
+#### How to do it...
+
+fence和semaphore的工作机制不同，我们逐一讨论。
+
+如下图所示，如果没有使用fence，在CPU上运行的应用程序在向GPU提交命令时，会使得命令在GPU上立即开始执行。
+
+![](B18491_01_08.jpg)
+
+在绝大多数情况下，我们都希望等待GPU上的命令执行后再开始处理新的命令。当我们引入fence，我们就可以得到GPU上的命令何时处理完毕，如下图所示：
+
+![](B18491_01_09.jpg)
+
+semaphore的工作机制类似，只是它负责处理GPU上运行的命令。下图展示了如何使用 Semaphore 来同步 GPU 上正在处理的命令。在提交缓冲区进行处理之前，应用程序负责创建信号传递器，并在命令缓冲区和信号传递器之间添加依赖关系。 一旦在 GPU 上处理完一个任务，就会发出信号给信号灯，下一个任务就可以继续进行。 这就强制规定了命令之间的顺
+
+![](B18491_01_10.jpg)
+
+此外，获取图像，渲染图像以及呈现图像的过程都是异步的，我们需要为这三个步骤实现同步。具体的做法是使用两个semaphore原语。当获取的图像可用时，`imageAvailable`就会被标记为signaled，从而提示渲染指令开始处理，当渲染指令处理完毕，就会想另一个同步原语imageRendered发出信号，进而开始呈现图像。整个过程如下图所示：
+
+![](B18491_01_11.jpg)
+
+---
+
+### Populating submission information for presentation
+
+提交一个command buffer需要一个`VkSubmitInfo`结构体的实例，该结构体允许我们指定等待（用于开始命令的执行进程）和发出信号（当command buffer执行结束后）的semaphore。
+
