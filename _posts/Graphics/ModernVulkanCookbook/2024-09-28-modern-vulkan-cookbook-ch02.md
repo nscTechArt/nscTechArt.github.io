@@ -185,5 +185,6 @@ vmaCreateAllocator(&allocaInfo, &allocator);
 
 #### How to do it...
 
+我们分情况讨论
 
-
+对于主机可见的内存，
