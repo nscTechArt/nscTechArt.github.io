@@ -516,3 +516,106 @@ layout(set = 2, binding = 0) readonly buffer VertexBuffer
 
 #### How to do it...
 
+一个描述符集布局通过`vkDescriptorSetLayout`结构体陈述了它的绑定（数量和类型）。而每个绑定又是通过`vkDerscriptorSetLayoutBinding`描述了，我们可以通过下图来更好地理解其中的关系
+
+![](B18491_02_11.webp)
+
+下面这段代码展示了如何指定`set = 1`中的两个binding
+
+```c++
+constexpr uint32_t kMaxBindings = 1000;
+const VkDescriptorSetLayoutBinding texBinding = 
+{
+	.binding = 0,
+    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPELD_IMAGED,
+    .decritptorCount = kMaxBindings,
+    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+};
+const VkDescriptorSetLayoutBinding samplerBinding = 
+{
+	.binding = 1,
+    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPER,
+    .decritptorCount = kMaxBindings,
+    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+};
+struct SetDesciptor
+{
+    uint32_t set;
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+}
+std::vector<SetDesciptor> sets(1);
+sets[0].set = 1;
+sets[0].bindings.push_back(texBinding);
+sets[0].bindings.push_back(samplerBinding);
+```
+
+接下来，我们构建描述符集布局，以创建一个描述符集
+
+```c++
+// to be completed
+```
+
+---
+
+### Pushing data to shaders using push constants
+
+向shader中推送常量是另一种向shader中传递数据的方式，这种方式非常高效，并且实现简单。但是传递数据的大小非常有限，Vulkan规范指正保证128字节的数据量。
+
+#### Getting ready
+
+我们将常量推送的实现和管理封装在`VulkanCore::Pipeline`类中
+
+#### How to do it...
+
+推送常量的命令会直接记录在command buffer中，并且不会出现同步的问题。常量在shader的声明如下，每个shader中最多只有一个常量
+
+```glsl
+layout (push_constant) uniform Transforms
+{
+	mat4 model;
+} PushConstants;
+```
+
+数据的推送必须配置在shader阶段，部分数据可以分配给不同的shader阶段，也可以分配给单独的阶段。我们需要注意的是，数据的总量不能超过`VkPhysicalDeviceLimits::maxPushConstantsSize`这个值
+
+```c++
+const VkPushConstantRange range = 
+{
+	.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+    .offset = 0,
+    .size = 64,
+};
+std::vector<VkPushConstantRange> pushConstants;
+pushConstants.push_back(range);
+```
+
+这段代码指出，vertex shader将使用记录在command buffer中的推送常量的前（`offset == 0`）64个字节，这个结构体将用于创建管线布局
+
+---
+
+### Creating a pipeline layout
+
+管线布局是一个需要通过应用程序创建并销毁的Vulkan对象。管线的布局是通过定义binding和set的布局的结构体指定的。
+
+在本小节中，我们将学习如何创建管线布局对象
+
+#### Getting ready
+
+在`VulkanCore::Pipeline`这个类中，`VkPipelineLayoutCreateInfo`会根据一个`VukanCore::Pipeline::SetDescritpor`数组自动创建
+
+#### How to do it...
+
+```
+
+```
+
+---
+
+
+
+
+
+#### Getting ready
+
+#### How to do it...
+
