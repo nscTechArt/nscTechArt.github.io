@@ -6,11 +6,15 @@ media_subpath: /assets/img/Graphics/3dcookbook/
 math: true
 ---
 
+### Intercepting OpenGL API calls
+
+
+
 ### Working With Direct State Access (DSA)
 
 在现代 OpenGL 中，直接状态访问（Direct State Access, DSA）提供了一种更加直观和简洁的方式来操作对象，比如纹理、缓冲区等，而不需要像早期 OpenGL 那样先绑定对象到上下文（绑定点），然后再执行操作。DSA 可以直接对对象进行操作，避免了频繁的绑定和解绑操作，提升了代码的可读性和性能。
 
-DSA函数根据对象分为下面几类：
+DSA函数根据操作的对象的类型分为下面几类：
 
 - Texture
 - Framebuffer
@@ -25,7 +29,7 @@ DSA函数根据对象分为下面几类：
 
 #### Texture
 
-1. 使用DSA，可以通过`glCreateTextures`来创建一个或多个texture对象，并且会在创建时中指定纹理目标，而不需要像传统OpenGL中先绑定到GL_TEXTURE_2D等目标：
+1. 使用DSA，可以通过`glCreateTextures`来创建一个或多个texture对象，并且会在创建时中指定纹理目标，而不需要像传统OpenGL中先绑定到`GL_TEXTURE_2D`等目标：
 
    ```c++
    GLuint texture;
@@ -46,7 +50,7 @@ DSA函数根据对象分为下面几类：
    glTextureSubImage2D(texture, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
    ```
 
-4. 尽管DSA可以减少绑定的操作，但是在实际渲染中，纹理仍然需要绑定到纹理单元。在传统OpenGL中，我们使用`glActiveTexture`与`glBindTexture`进行绑定，而在DSA中，通过glBindTextureUnit就可以直接将纹理绑定到指定的纹理单元：
+4. 尽管DSA可以减少绑定的操作，但是在实际渲染中，纹理仍然需要绑定到纹理单元。在传统OpenGL中，我们使用`glActiveTexture`与`glBindTexture`进行绑定，而在DSA中，通过`glBindTextureUnit`就可以直接将纹理绑定到指定的纹理单元：
 
    ```c++
    glBindTextureUnit(0, texture);
@@ -58,11 +62,11 @@ DSA函数根据对象分为下面几类：
    glGenterateTextureMipmap(GLuint texture);
    ```
 
-[***这里***](https://github.com/nscTechArt/3d-graphics-rendering-cookbook/blob/main/sandbox/Chapter02/03_STB/src/main.cpp)是一个使用DSA绘制纹理的例子
+[这里](https://github.com/nscTechArt/OpenGL-Demos/blob/main/example/chapter02/src/ch02_STBI.cpp)是一个使用DSA绘制纹理的例子
 
 #### Buffer
 
-在DSA中，我们通过`glCreateBuffers`来创建一个或多个buffer对象。需要注意的是，使用`glCreateBuffers`不需要像`glCreateTextures`那样指定纹理对象的类型，这意味着创建的buffer用于任意的类型，例如，我们通过一个compute shader在GPU上填充了一个shader storage buffer，该buffer后续也可以作为绘制命令的indirect buffer。
+在DSA中，我们通过`glCreateBuffers`来创建一个或多个buffer对象。需要注意的是，使用`glCreateBuffers`不需要像`glCreateTextures`那样指定纹理对象的类型，这意味着创建的buffer可以用于任意的类型，例如，我们通过一个compute shader在GPU上填充了一个shader storage buffer，该buffer后续也可以作为绘制命令的indirect buffer。
 
 我们下面来看一个例子：
 
@@ -88,7 +92,7 @@ DSA函数根据对象分为下面几类：
    glNamedBufferStorage(uniformBuffer, kBufferSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
    ```
 
-3. 在DSA中，我们可以通过glNamedBufferSubData直接更新buffer中的数据，而无需先绑定再操作
+3. 在DSA中，我们可以通过`glNamedBufferSubData`直接更新buffer中的数据，而无需先绑定再操作
 
    ```c++
    glNamedBufferSubData(uniformBuffer, 0, kBufferSize, data);
@@ -100,11 +104,25 @@ DSA函数根据对象分为下面几类：
    glBindBufferRange(GL_UNIFORM_BUFFER, 0, uniformBuffer, 0, kBufferSize);
    ```
 
-完整的代码在[***这里***](https://github.com/nscTechArt/3d-graphics-rendering-cookbook/blob/main/sandbox/Chapter02/07_Assimp/src/main.cpp)
+完整的代码在[这里](https://github.com/nscTechArt/OpenGL-Demos/blob/main/example/chapter02/src/ch02_STBI.cpp)
 
 至于其他类型在DSA中的使用，我们会逐步更新
 
 ---
+
+### Loading and compiling shaders in OpenGL
+
+我们将在本小节中了解如何加载、编译着色器，并与着色器程序相链接。
+
+#### Getting ready
+
+首先，我们需要先实现从本地中读取文件的功能，此功能与图形API无关
+
+```c++
+
+```
+
+
 
 ### Implementing programmable vertex pulling (PVP) in OpenGL
 
