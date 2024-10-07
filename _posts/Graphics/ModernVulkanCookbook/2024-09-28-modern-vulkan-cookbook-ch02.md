@@ -8,13 +8,13 @@ math: false
 
 ### Understanding Vulkan's memory model
 
-在Vulkan中，内存的管理与分配至关重要。但是Vulkan只负责决定分配内存的确切内存地址，除此以外所有的细节都由应用程序负责。也就是说，作为开发者，我们需要自行管理内存类型、内存大小、对齐方式以及任何子分配。这种设计方式为应用程序提供了更大程度的内存管理控制，允许开发者针对特定用途优化程序。
+在Vulkan中，内存的管理与分配至关重要。**但是Vulkan只负责决定分配内存的确切内存地址，除此以外所有的细节都由应用程序负责**。也就是说，作为开发者，我们需要自行管理内存类型、内存大小、对齐方式以及任何子分配。这种设计方式为应用程序提供了更大程度的内存管理控制，允许开发者针对特定用途优化程序。
 
 在本小节中，我们将会提供一些关于内存类型的基本信息，同时总结如何分配内存，并与资源绑定
 
 #### Getting ready
 
-显卡分为两种，集成显卡与独立显卡。集成显卡会与CPU共享内存，如下图所示：
+显卡分为两种，集成显卡与独立显卡。集成显卡会与CPU共享内存，也就是Host Memory，如下图所示：
 
 ![](B18491_02_02.jpg)
 
@@ -22,7 +22,7 @@ math: false
 
 ![](B18491_02_01.jpg)
 
-Vulkan提供了不同类型的内存：
+Vulkan提供了三种不同类型的内存：
 
 - **Device-local memory：**
   - 为GPU的使用而优化的内存类型，是显卡的本地内存。它通常比主机可见内存更快，但是无法从CPU中访问。
@@ -105,7 +105,9 @@ vmaCreateAllocator(&allocaInfo, &allocator);
 
 ### Creating buffers
 
-在Vulkan中，buffer是一个存储数据的连续内存块。数据可以是顶点、索引、uniform，等等。
+在Vulkan中，buffer是一个存储数据的连续内存块。这里的数据可以是顶点、索引、uniform，等等。
+
+在 Vulkan 中，`VkBuffer` 对象本身确实只是一个元数据对象，它描述了缓冲区的类型、大小和用途等信息，但不直接包含数据。实际的数据存储在分配的内存中，通过 `vkAllocateMemory` 和 `vkBindBufferMemory` 函数将内存绑定到 `VkBuffer` 对象。
 
 与buffer关联的内存是在buffer创建后才分配的。
 
@@ -158,7 +160,7 @@ vmaCreateAllocator(&allocaInfo, &allocator);
    };
    ```
 
-2. 然后，我们调用vmaCreateBuffer获取一个buffer以及buffer分配的内存的句柄
+2. 然后，我们调用`vmaCreateBuffer`获取一个buffer以及buffer分配的内存的句柄
 
    ```c++
    VmaAllocation allocation; // needs to live until the buffer is desctoried
@@ -177,7 +179,7 @@ vmaCreateAllocator(&allocaInfo, &allocator);
 
 ### Uploading data to buffers
 
-将数据从应用程序中上传到GPU上的过程取决于buffer的类型。对于主机可见的buffer来说，我们可以使用memcpy直接将数据拷贝到buffer上。而对于设备本地的buffer，我们需要一个一个对CPU和GPU均可见的staging buffer来完成数据的传递。
+将数据从应用程序中上传到GPU上的过程取决于buffer的类型。对于host-visible buffer来说，我们可以使用`memcpy`直接将数据拷贝到buffer上。而对于local-device buffer，我们需要一个对CPU和GPU均可见的staging buffer来完成数据的传递。
 
 #### Getting ready
 
@@ -187,7 +189,7 @@ vmaCreateAllocator(&allocaInfo, &allocator);
 
 我们分情况讨论
 
-**对于主机可见的内存**，只需要`vmaMapMemory`获取指向目标buffer的指针，然后通过`memcpy`拷贝数据即可。这个操作是同步的，所以当`memcpy`返回后，我们就可以取消映射。此外，当我们创建主机可见的buffer时，我们可以立即对其进行映射，保持映射状态，直至该buffer被销毁。这样的做法可以减少映射操作的内存开销。
+**对于主机可见的内存**，只需要`vmaMapMemory`获取指向目标buffer的指针，然后通过`memcpy`拷贝数据即可。这个操作是同步的，所以当`memcpy`返回后，我们就可以取消映射。此外，当我们创建host-visible buffer时，我们可以立即对其进行映射，保持映射状态，直至该buffer被销毁。这样的做法可以减少映射操作的内存开销。
 
 ```c++
 VmaAllocator allocator; // valid VMA allocator
@@ -202,7 +204,7 @@ vmaUnmapMemory(allocator, allocation);
 VK_CHECK(vmaFlushAllocation(allocator, allocation, offset, size));
 ```
 
-**对于设备本地的内存**，我们需要先将数据拷贝到staging buffer上，然后再通过vkCmdCopyBuffer将数据从staging buffer拷贝到我们的目标buffer中，这一步操作需要使用到command buffer。过程如下图所示：
+**对于设备本地的内存**，我们需要先将数据拷贝到staging buffer上，然后再通过`vkCmdCopyBuffer`将数据从staging buffer拷贝到我们的目标buffer中，这一步操作需要使用到command buffer。过程如下图所示：
 
 ![](B18491_02_04.jpg)
 
@@ -222,8 +224,6 @@ VkCmdCopyBuffer(commanBuffer, stagingBuffer, buffer, 1, &region);
 ### Creating a staging buffer
 
 创建一个staging buffer的过程与创建一个普通buffer的过程类似，只是我们需要指定一个标志，表示此buffer是主机可见的。
-
-在本小节中，我们将了解如何创建一个staging buffer
 
 #### Getting ready
 
@@ -307,8 +307,6 @@ VK_CHECK(vmaCreateBuffer(allocator, &stagingBufferInfo, &allocCreateInfo, &buffe
 在Vulkan中，处理command buffer时，可以对命令进行重新排序，但是要受到某些限制。这就是所谓的command buffer重排序，它允许驱动程序优化命令的执行顺序，从而有助于提高性能。
 
 好在 Vulkan 提供了一种称为管道屏障的机制，可以确保以正确的顺序执行相关命令。 它们用于明确指定命令之间的依赖关系，防止它们被重新排序，以及它们在哪些阶段可能会重叠。 
-
-本小节将解释什么是管道屏障及其属性含义，以及管线屏障的创建和安装
 
 #### Getting ready
 
