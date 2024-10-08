@@ -624,5 +624,258 @@ std::vector<VkPushConstantRange> pushConsts;
 pushConsts.push_back(range);
 ```
 
-常量的推送直接记录在Command buffer中，并且不会像其他资源那样容易出现同步问题。
+常量的推送直接记录在Command buffer中，且不会像其他资源那样容易出现同步问题。
 
+---
+
+### Creating a pipeline layout
+
+在Vulkan中，应用程序需要负责`VkPipelineLayout`对象的创建与销毁。我们使用定义了`binding`与`set`布局的结构体指定`VkPipelineLayout`
+
+#### Getting ready
+
+在`VulkanCore::Pipeline`类中，`VkPipelineLayoutCreateInfo`会根据我们提供的`binding`与`set`的信息自行创建
+
+#### How to do it…
+
+在创建`VkPipelineLayout`时，我们需要准备描述符集布局和推送的常量的相关信息
+
+```c++
+std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+
+const VkPipelineLayoutCreateInfo pipelineLayoutInfo = 
+{
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    .setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
+    .pSetLayouts = descriptorSetLayouts.data(),
+    .pushConstantRangeCount = !pushConstants.empty() ? uint32_t(pushConstants.size()) : 0,
+    .pPushConstantRanges = !pushConstants.empty() ? pushConstants.data() : nullptr,
+};
+
+VkPipelineLayout pipelineLayout;
+VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+```
+
+---
+
+### Creating a descriptor pool
+
+描述符池包含它可以提供的最大数量的描述符，这些描述符按绑定类型分组。例如，如果同一`set`的两个`binding`各自需要一个图像，那么描述符池必须至少提供两个描述符。
+
+#### Getting ready
+
+相关代码封装在 `VulkanCore::Pipeline::initDescriptorPool()` 方法中
+
+#### How to do it…
+
+创建描述符池很简单，我们只需要提供一个指定资源的binding类型与最大数量的列表即可
+
+```c++
+constexpr uint32_t swapchainImageCount = 3;
+std::vector<VkDescriptorPoolSize> poolSize;
+poolSize.emplace_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, swapchainImageCount * kMaxBindings});
+poolSize.emplace_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLER, swapchainImageCount * kMaxBindings});
+```
+
+创建的过程就不展示了，比较简单
+
+---
+
+### Allocating descriptor sets
+
+当我们创建好描述符池后，我们就可以从其中分配描述符集了
+
+#### Getting ready
+
+相关代码封装在`VulkanCore::Pipeline::allocateDescriptors()`函数中。我们需要提供要创建的描述符集的数量，以及每个描述符集所需的`binding`数量。
+
+#### How to do it…
+
+分配描述符集很简单，我们只需要填充`VkDescriptorSetAllocateInfo`结构体，并调用`vkAllocateDescriptorSets`即可
+
+具体代码暂时不展示了
+
+---
+
+### Updating descriptor sets during rendering
+
+分配描述估计时，并不会与资源进行关联，我们在本小节中了解如何更新描述符集
+
+#### Getting ready
+
+在`VulkanCore::Pipeline`类中，我们根据资源类型的不同，提供了对应类型的更新描述符集的函数
+
+- `updateSamplersDescriptorSets`
+- `updateTexturesDescriptorSets`
+- `updateBuffersDescriptorSets`
+
+#### How to do it...
+
+在Vulkan中，我们通过`vkUpdateDescriptorSets`函数将一个描述符集与资源关联在一起。每次调用`vkUpdateDescriptorSets`，我们可以更新一个或多个`set`中的一个或多个`binding`。
+
+在我们了解如何更新描述符之前，我们不妨先了解一下如何更新一个单一的`binding`
+
+通过一个`binding`，我们可以关联的资源包括：
+
+- texture
+- texture array
+- sampler
+- sampler array
+- buffer 
+- buffer array
+
+当关联图片或采样器时，我们使用`VkDescriptorImageInfo`结构体，当关联buffer时，我们使用`VkDescriptorBufferInfo`结构体。当我们填充好这些结构体后，我们就可以使用`VkWriteDescriptorSet`结构体，通过一个`binding`将它们绑定在一起。
+
+我们来看下面这个shader，并以它为例子
+
+```glsl
+layout (set = 1, binding = 0) uniform texture2D textures[];
+layout (set = 1, binding = 1) uniform sampler   samplers[];
+layout (set = 1, binding = 2) readonly buffer VertexBuffer 
+{
+    Vertex vertices[];
+} vertexBuffer;
+```
+
+当我们想要更新`texture[]`数组时，我们需要为每个数组中的元素填充一个`VkDescriptorImageInfo`，然后将所有的`VkDescriptorImageInfo`写入`VkWriteDesciptorSet`中。
+
+```c++
+VkImageView imageViews[2]; // valid image view objects
+
+VkDescriptorImageInfo textureInfos[] =
+{
+	VkDescriptorImageInfo
+    {
+        .imageView = imageViews[0],
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    },
+	VkDescriptorImageInfo
+    {
+        .imageView = imageViews[1],
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    },
+}
+
+const VkWriteDescriptorSet textureWriteDecsSet = 
+{
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    .dstSet = 1,
+    .dstBinding = 0,
+    .dstArrayElement = 0,
+    .descriptorCount = 2,
+    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+    .pImageInfo = &textureInfos,
+    .pBufferInfo = nullptr,
+};
+```
+
+在这段代码中，我们通过指定`.dstSet = 1`，将两个`VkImageView`对象绑定到了`set 1`上，并通过`.dstBinding = 0`绑定到了`binding = 0`上。
+
+至于shader中的`sampler[]`和`VertexBuffer`我们就不再展示具体的过程了，大同小异。
+
+最后，我们将所有的`VkWriteDescriptorSet`合并为一个数组，并调用`vkUpdateDescriptorSet`，更新资源与描述符集之间的关联
+
+---
+
+### Passing resources to shader(binding descriptor sets)
+
+我们前面已经提到过，使用vkUpdateDescriptorSet只是完成了资源的关联，我们还需要绑定描述符集，才能将资源传递给shader使用
+
+#### Getting ready
+
+我们将绑定描述符集的相关代码封装在`VulkanCore::Pipeline::bindDescriptorSets()`方法中
+
+#### How to do it...
+
+绑定描述符集，我们需要调用`vkCmdBindDescriptorSets`
+
+```c++
+VkCommandBuffer commandBuffer; // valid command buffer
+VkPipelineLayout pipelineLayout; // valid pipeline layout
+uint32_t set; // set number
+VkDescriptorSet descriptorSet;
+
+VkCmdBindDescriptorSets(
+    commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, set,
+	1u, &descriptorSet, 0, nullptr);
+```
+
+---
+
+### Updating push constants during rendering
+
+与推送常量一样，当我们需要更新常量时，我们直接将值记录在对应的command buffer中
+
+#### Getting ready
+
+相关代码封装在`VulkanCore::Pipeline:: ``udpatePushConstants()`方法中
+
+#### How to do it...
+
+更新常量很简单，我们只需要调用`vkCmdPushConstants`即可
+
+```c++
+glm::vec4 vector; // constant
+
+vkCmdPushConstants(
+    commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::vec4), &vectir);
+```
+
+---
+
+### Customizing shader behavior with specialization constants
+
+编译着色器代码的过程一旦完成就具有不可变性。编译过程会带来大量的时间开销，通常在运行时会避免这种情况。即使对着色器进行微小的调整也需要重新编译，这会导致创建一个新的着色器模块，并可能需要创建一个新的管线——所有这些都需要大量的resource-intensive操作。
+
+在Vulkan中，专用化常量能够允许我们在创建管线时，为shader参数指定常量值，而无需为了更新这些值时重新编译。
+
+#### Getting ready
+
+我们可以在结构体`VulkanCore::Pipeline::GraphicsPipelineDescriptor`中设置特化常量。对于每个使用特化常量的shader类型，我们需要一个`VkSpecializationMapEntry`的结构体。
+
+#### How to do it...
+
+在GLSL中，我们通过修饰符`constant_id`来声明特化常量
+
+```glsl
+layout (constant_id = 0) const bool useShaderDebug = false;
+```
+
+当我们想要创建一个使用特化常量的管线时，我们首先将特化常量的值及其ID填充到`VkSpecializationInfo`结构体中。然后再把这个结构体传递给`VkPipelineShaderStageCreateInfo`。
+
+```c++
+const bool kUseShaderDebug = false;
+
+const VkSpecializationMapEntry useShaderDebug = 
+{
+    .constantID = 0,
+    .offset = 0,
+    .size = sizeof(bool),
+};
+
+const VkSpecializationInfo vertexSpecializationInfo = 
+{
+    .mapEntryCount = 1,
+    .pMapEntries = &useShaderDebug,
+    .dataSize = sizeof(bool),
+    .pData = &kUseShaderDebug,
+};
+
+const VkPipelineShaderStageCreateInfo info =
+{
+    ...
+    .pSpecializationInfo = &vertexSpecializationInfo,
+};
+```
+
+---
+
+### Implementing MDI and PVP
+
+MDI与PVP是现代图形API的特性，能够实现更高效灵活的顶点处理
+
+**MDI（Multiple Draw Indirect）**：允许我们使用单个命令发出多个draw call，其中每个draw call会从存储在设备中的buffer中获取参数（这也是被称为indirect的原因）。这个特性非常有用，因为这些参数可以由GPU自身修改。
+
+**PVP（programmable vertex pulling）**：每个着色器实例根据其索引和实例 ID 检索其顶点数据，而不是用顶点的属性进行初始化。这提供了灵活性，因为顶点属性及其格式不是固定在管线中的，并且可以仅基于着色器代码进行更改。
+
+接下来，我们将分别展示如何实现MDI与PVP。
