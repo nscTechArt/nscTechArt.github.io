@@ -534,6 +534,8 @@ VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
 3. 记录完成后，我们需要调用`vkEndCommandBuffer`，为提交command buffer做准备
 4. 通过`vkQueueSubmit`将该command buffer提交到设备中以执行
 
+![](vkcommands.png)
+
 在本小节中，我们将深入这一过程的细节
 
 #### Getting ready
