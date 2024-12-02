@@ -1,0 +1,71 @@
+---
+title: Unity中实现Kawase Blur
+date: 2024-12-02 09:40 +0800
+categories: [Portfolio, Unity]
+media_subpath: /assets/img/Portfolio/Unity/
+tag: [Unity, Blur]
+math: false
+---
+
+### 思路
+
+模糊处理在思路上很简单，只需要收集周围像素的颜色值并求平均值，从而得到模糊的像素。但是不同的实现方法会带来不同的视觉效果、模糊质量以及性能。
+
+KawaseBlur是一个多pass的模糊算法，其中每个pass会在前一个pass的模糊基础上进行进一步模糊。在每个pass中，新的像素值是以当前像素为中心的矩形区域的四个角的16个采样的平均值。如下图所示：
+
+![](figure10-518113.png)
+
+### 实现细节
+
+#### Volume Component
+
+Kawase Blur的设置较为简单，只需要美术指定**模糊迭代的次数**与**降采样倍率**即可
+
+```c#
+[VolumeComponentMenu("Custom/Kawase Blur")]
+public class KawaseBlurVolume : VolumeComponent, IPostProcessComponent
+{
+    [Space]
+    public BoolParameter m_Enable = new(false);
+    [Space]
+    public ClampedIntParameter m_BlurPassNumber = new(2, 2, 15);
+    public ClampedIntParameter m_DownSample = new(1, 1, 4);
+    
+    public bool IsActive() => m_Enable.value;
+    public bool IsTileCompatible() => false;
+}
+```
+
+{: file="KawaseBlurVolume.cs"}
+
+
+在Render Pass中，我们
+
+```glsl
+CustomVaryings KawaseBlurVert(Attributes input)
+{
+    CustomVaryings output;
+    output.positionHCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+    float2 uv  = GetFullScreenTriangleTexCoord(input.vertexID);
+    output.uv   = uv * _BlitScaleBias.xy + _BlitScaleBias.zw;
+    output.uvTopRight    = output.uv + float2( _KawaseBlurOffset,  _KawaseBlurOffset) * _BlitTexture_TexelSize.xy;
+    output.uvTopLeft     = output.uv + float2(-_KawaseBlurOffset,  _KawaseBlurOffset) * _BlitTexture_TexelSize.xy;
+    output.uvBottomRight = output.uv + float2( _KawaseBlurOffset, -_KawaseBlurOffset) * _BlitTexture_TexelSize.xy;
+    output.uvBottomLeft  = output.uv + float2(-_KawaseBlurOffset, -_KawaseBlurOffset) * _BlitTexture_TexelSize.xy;
+    return output;
+}
+
+float4 KawaseBlurFrag(CustomVaryings input) : SV_Target
+{
+    float4 color = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, input.uv) * 0.2;
+    color += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, input.uvTopRight) * 0.2;
+    color += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, input.uvTopLeft) * 0.2;
+    color += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, input.uvBottomRight) * 0.2;
+    color += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, input.uvBottomLeft) * 0.2;
+    return float4(color.rgb, 1.0);
+}
+```
+
+### 效果演示
+
+Kawase Blur在物宅空间
