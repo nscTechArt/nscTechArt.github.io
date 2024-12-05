@@ -35,11 +35,59 @@ public class KawaseBlurVolume : VolumeComponent, IPostProcessComponent
     public bool IsTileCompatible() => false;
 }
 ```
-
 {: file="KawaseBlurVolume.cs"}
+{: add-lines="7-8"}
 
+#### Render Pass
 
-在Render Pass中，我们
+在Render Pass中，我们在两个临时纹理之间进行乒乓式blit，并且在迭代过程中，根据迭代次数使用不同的kernel。
+
+```c#
+public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+{
+    ...
+    // blur pass
+    // ---------
+    cmd.SetGlobalFloat(KawaseBlurOffsetID, 1.5f);
+    Blitter.BlitCameraTexture(cmd, mSource, mTemporaryTexture1, mPassMaterial, 0);
+    for (int i = 1; i < mVolumeComponent.m_BlurPassNumber.value - 1; i++)
+    {
+        cmd.SetGlobalFloat(KawaseBlurOffsetID, 0.5f + i);
+        Blitter.BlitCameraTexture(cmd, mTemporaryTexture1, mTemporaryTexture2, mPassMaterial, 0);
+        (mTemporaryTexture1, mTemporaryTexture2) = (mTemporaryTexture2, mTemporaryTexture1);
+    }
+    ...
+}
+```
+{: file="KawaseBlurRenderPass.cs"}
+
+模糊算法通常作为全屏后处理，但也可以在获取模糊结果后，用于场景中的特殊物体或组件，例如UI、毛玻璃等。对此，我们需要对最终的模糊结果不同的处理：
+
+```c#
+public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+{
+    ...
+    // final pass
+    // ----------
+    cmd.SetGlobalFloat(KawaseBlurOffsetID, 0.5f + mVolumeComponent.m_BlurPassNumber.value - 1);
+    if (mSettings.m_RenderToFullScreen)
+    {
+        Blitter.BlitCameraTexture(cmd, mTemporaryTexture1, mDestination, mPassMaterial, 0);
+    }
+    else
+    {
+        Blitter.BlitCameraTexture(cmd, mTemporaryTexture1, mTemporaryTexture2, mPassMaterial, 0);
+        cmd.SetGlobalTexture(mSettings.m_TargetTextureName, mTemporaryTexture2);
+    }
+    ...
+}
+```
+{: file="KawaseBlurRenderPass.cs"}
+
+#### Shader
+
+在对应的Shader中，我们在顶点着色器中计算用于采样的偏移UV，在片段着色其中完成采样与加权。
+
 
 ```glsl
 CustomVaryings KawaseBlurVert(Attributes input)
@@ -65,7 +113,15 @@ float4 KawaseBlurFrag(CustomVaryings input) : SV_Target
     return float4(color.rgb, 1.0);
 }
 ```
+{: file="KawaseBlurShader.shader"}
 
 ### 效果演示
 
-Kawase Blur在物宅空间
+![](cozy-space-blu-ui.jpg)
+
+---
+
+![](CozySpace2024-12-02 10-14-58.jpg)
+
+---
+
