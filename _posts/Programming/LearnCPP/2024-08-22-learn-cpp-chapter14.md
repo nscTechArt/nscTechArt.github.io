@@ -1,7 +1,8 @@
 ---
 title: Ch14 Introduction to Classes
 date: 2024-08-22 15:26 +0800
-categories: [Codes, Learn C++]
+categories: [Programming, Learn C++]
+tags: [C++]
 ---
 
 ### 14.1 Introduction to object-oriented programming

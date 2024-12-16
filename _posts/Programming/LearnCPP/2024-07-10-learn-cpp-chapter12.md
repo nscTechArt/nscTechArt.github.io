@@ -1,7 +1,8 @@
 ---
 title: Compound Types References and Pointers
 date: 2024-07-10 09:55 +0800
-categories: [Codes, Learn C++]
+categories: [Programming, Learn C++]
+tags: [C++]
 ---
 
 随着我们开发的程序越来越复杂，C++中的基础类型已经逐渐无法实现一些复杂的需求。我们来看一个例子。

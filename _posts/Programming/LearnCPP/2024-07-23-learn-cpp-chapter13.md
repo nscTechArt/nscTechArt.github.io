@@ -1,7 +1,8 @@
 ---
 title: Ch13 Compound Types Enums and Structs
 date: 2024-07-23 09:26 +0800
-categories: [Codes, Learn C++]
+categories: [Programming, Learn C++]
+tags: [C++]
 ---
 
 ### 13.1 Introduction to user-defined types

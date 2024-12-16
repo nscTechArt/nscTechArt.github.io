@@ -1,7 +1,8 @@
 ---
 title: Move Semantics and Smart Pointers
 date: 2024-08-22 15:02 +0800
-categories: [Codes, Learn C++]
+categories: [Programming, Learn C++]
+tags: [C++]
 ---
 
 ### 22.1 Introduction to smart pointers and move sementics

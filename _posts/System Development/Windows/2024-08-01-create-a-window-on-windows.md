@@ -2,6 +2,7 @@
 title: 在Windows系统中创建一个窗口程序
 date: 2024-08-01 22:54 +0800
 categories: [System Development, Windows]
+tags: [Windows]
 ---
 
 本篇博客记录一下如何在Windows平台下创建一个窗口系统，并梳理出一个简易的框架，为实现软光栅器做铺垫。

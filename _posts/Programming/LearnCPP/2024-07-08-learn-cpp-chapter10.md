@@ -1,7 +1,8 @@
 ---
-title: Type Conversion, Type Aliases, and Type Deduction
+title: Chapter 10 Type Conversion, Type Aliases, and Type Deduction
 date: 2024-07-08 10:22 +0800
-categories: [Codes, Learn C++]
+categories: [Programming, Learn C++]
+tags: [C++]
 ---
 
 ### 10.1 Implicit type conversion
