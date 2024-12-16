@@ -2,7 +2,7 @@
 title: Instances
 date: 2024-06-30 09:39 +0800
 categories: [Graphics, Ray Tracing The Next Week]
-tags: [光线追踪, 离线渲染]
+tags: [Ray Tracing]
 media_subpath: /assets/img/Graphics/RayTracingBookSeries/
 math: true
 ---

@@ -1,5 +1,5 @@
 ---
-title: Move Semantics and Smart Pointers
+title: Chapter 22 Move Semantics and Smart Pointers
 date: 2024-08-22 15:02 +0800
 categories: [Programming, Learn C++]
 tags: [C++]

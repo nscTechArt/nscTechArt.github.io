@@ -1,5 +1,5 @@
 ---
-title: Compound Types References and Pointers
+title: Chapter 12 Compound Types References and Pointers
 date: 2024-07-10 09:55 +0800
 categories: [Programming, Learn C++]
 tags: [C++]

@@ -2,7 +2,7 @@
 title: Motion Blur
 date: 2024-06-27 15:48 +0800
 categories: [Graphics, Ray Tracing The Next Week]
-tags: [光线追踪, 离线渲染, Motion Blur]
+tags: [Ray Tracing]
 media_subpath: /assets/img/Graphics/RayTracingBookSeries/
 ---
 

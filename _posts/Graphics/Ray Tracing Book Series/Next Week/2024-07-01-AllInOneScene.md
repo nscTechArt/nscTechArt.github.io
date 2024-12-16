@@ -2,7 +2,7 @@
 title: A Scene Testing All New Features
 date: 2024-07-01 11:27 +0800
 categories: [Graphics, Ray Tracing The Next Week]
-tags: [光线追踪, 离线渲染]
+tags: [Ray Tracing]
 media_subpath: /assets/img/Graphics/RayTracingBookSeries/
 ---
 

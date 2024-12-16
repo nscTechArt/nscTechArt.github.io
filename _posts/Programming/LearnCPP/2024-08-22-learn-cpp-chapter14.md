@@ -1,5 +1,5 @@
 ---
-title: Ch14 Introduction to Classes
+title: Chapter 14 Introduction to Classes
 date: 2024-08-22 15:26 +0800
 categories: [Programming, Learn C++]
 tags: [C++]

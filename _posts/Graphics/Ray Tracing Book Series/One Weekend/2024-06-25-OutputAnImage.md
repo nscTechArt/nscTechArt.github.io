@@ -2,7 +2,7 @@
 title: Output An Image
 date: 2024-06-25 21:00 +0800
 categories: [Graphics, Ray Tracing In One Weekend]
-tags: [光线追踪, 离线渲染]
+tags: [Ray Tracing]
 media_subpath: /assets/img/Graphics/RayTracingBookSeries/
 ---
 

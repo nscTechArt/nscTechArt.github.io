@@ -2,7 +2,7 @@
 title: Moving Camera Code Into Its Own Class
 date: 2024-06-26 10:35 +0800
 categories: [Graphics, Ray Tracing In One Weekend]
-tags: [光线追踪, 离线渲染]
+tags: [Ray Tracing]
 ---
 
 因为相机是渲染器的一个重要组成模块，我们有必要将其抽象到一个单独的类中。`camera`类主要负责两个任务：

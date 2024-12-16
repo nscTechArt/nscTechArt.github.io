@@ -1,5 +1,5 @@
 ---
-title: Ch13 Compound Types Enums and Structs
+title: Chapter 13 Compound Types Enums and Structs
 date: 2024-07-23 09:26 +0800
 categories: [Programming, Learn C++]
 tags: [C++]
