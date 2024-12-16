@@ -6,161 +6,138 @@ tags: [Ray Tracing]
 media_subpath: /assets/img/Graphics/RayTracingBookSeries/
 ---
 
-几乎所有的图形程序都有一些类用于存储向量与颜色。在很多系统中，这些向量是4维的，对于位置向量来说，这包括三维空间中的位置以及一个齐次坐标，对于颜色向量来说，包括RGB颜色以及alpha透明值。对于我们的渲染器来说，三维向量就足够了。我们将会使用同一个`vec3`类用于表示颜色、位置、方向、偏移量等。同时，我们还会声明两个别名：`point3`和`color`。
+几乎所有的图形程序都有一些类用于存储向量与颜色。在很多系统中，这些向量是4维的，对于位置向量来说，这包括三维空间中的位置以及一个齐次坐标，对于颜色向量来说，包括RGB颜色以及alpha透明值。对于我们的渲染器来说，三维向量就足够了。我们将会使用同一个`Vec3`类用于表示颜色、位置、方向、偏移量等。同时，我们还会声明两个别名：`Point3`和`Color`。
 
-我们将这个类的定义放在`vec3.h`头文件中。同时我们也会定义一些有用的向量函数：
+我们将这个类的定义放在`math.hpp`头文件中。同时我们也会定义一些有用的向量函数：
 
 ```c++
-#ifndef VEC3_H
-#define VEC3_H
+#pragma once
 
-#include <cmath>
-#include <iostream>
+#include <pch.hpp>
 
-using std::sqrt;
-
-class vec3;
-using point3 = vec3;
-
-class vec3
+namespace EngineCore
 {
+    // Vec3 class
+    // ----------
+    class Vec3
+    {
     public:
-    double e[3];
+        Vec3();
+        Vec3(double e0, double e1, double e2);
 
-    vec3(): e {0, 0, 0} {}
-    vec3(double e0, double e1, double e2): e{e0, e1, e2} {}
+        double x() const;
+        double y() const;
+        double z() const;
 
-    double x() const {return e[0];}
-    double y() const {return e[1];}
-    double z() const {return e[2];}
+        Vec3    operator-() const;
+        Vec3&   operator+=(const Vec3& v);
+        Vec3&   operator*=(const double t);
+        Vec3&   operator/=(const double t);
+        double  operator[](int i) const;
+        double& operator[](int i);
 
-    vec3 operator- () const {return vec3(-e[0], -e[1], -e[2]);}
-    double operator[] (int i) const {return e[i];}
-    double& operator[] (int i) {return e[i];}
+        double lengthSquared() const;
+        double length() const;
 
-    vec3& operator+= (const vec3& v)
+    public:
+        double e[3];
+    };
+
+    // vector utility functions
+    // ------------------------
+    inline std::ostream& operator<<(std::ostream& out, const Vec3& v)
     {
-        e[0] += v.e[0];
-        e[1] += v.e[1];
-        e[2] += v.e[2];
-        return *this;
+        return out << v.e[0] << ' ' << v.e[1] << ' ' << v.e[2];
     }
 
-    vec3& operator*= (double t)
+    inline Vec3 operator+(const Vec3& u, const Vec3& v)
     {
-        e[0] *= t;
-        e[1] *= t;
-        e[2] *= t;
-        return *this;
+        return Vec3(u.e[0] + v.e[0], u.e[1] + v.e[1], u.e[2] + v.e[2]);
     }
 
-    vec3 operator/= (double t)
+    inline Vec3 operator-(const Vec3& u, const Vec3& v)
     {
-        return *this *= 1 / t;
+        return Vec3(u.e[0] - v.e[0], u.e[1] - v.e[1], u.e[2] - v.e[2]);
     }
 
-    double lengthSquared() const
+    inline Vec3 operator*(const Vec3& u, const Vec3& v)
     {
-        return e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+        return Vec3(u.e[0] * v.e[0], u.e[1] * v.e[1], u.e[2] * v.e[2]);
     }
 
-    double length() const
+    inline Vec3 operator*(double t, const Vec3& v)
     {
-        return sqrt(lengthSquared());
+        return Vec3(t * v.e[0], t * v.e[1], t * v.e[2]);
     }
-};
 
-// VECTOR UTILITY FUNCTIONS
-inline std::ostream& operator<< (std::ostream& out, const vec3& v)
-{
-    return out << v.e[0] << ' ' << v.e[1] << ' ' << v.e[2];
+    inline Vec3 operator*(const Vec3& v, double t)
+    {
+        return t * v;
+    }
+
+    inline Vec3 operator/(Vec3 v, double t)
+    {
+        return (1 / t) * v;
+    }
+
+    inline double dot(const Vec3& u, const Vec3& v)
+    {
+        return u.e[0] * v.e[0] + u.e[1] * v.e[1] + u.e[2] * v.e[2];
+    }
+
+    inline Vec3 cross(const Vec3& u, const Vec3& v)
+    {
+        return Vec3(u.e[1] * v.e[2] - u.e[2] * v.e[1],
+                    u.e[2] * v.e[0] - u.e[0] * v.e[2],
+                    u.e[0] * v.e[1] - u.e[1] * v.e[0]);
+    }
+
+    inline Vec3 normalize(Vec3 v)
+    {
+        return v / v.length();
+    }
+
 }
 
-inline vec3 operator+ (const vec3& u, const vec3& v)
-{
-    return vec3(u.e[0] + v.e[0], u.e[1] + v.e[1], u.e[2] + v.e[2]);
-}
 
-inline vec3 operator- (const vec3& u, const vec3& v)
-{
-    return vec3(u.e[0] - v.e[0], u.e[1] - v.e[1], u.e[2] - v.e[2]);
-}
-
-inline vec3 operator* (const vec3& u, const vec3& v)
-{
-    return vec3(u.e[0] * v.e[0], u.e[1] * v.e[1], u.e[2] * v.e[2]);
-}
-
-inline vec3 operator* (double t, const vec3& v)
-{
-    return vec3(v.e[0] * t, v.e[1] * t, v.e[2] * t);
-}
-
-inline vec3 operator* (const vec3& v, double t)
-{
-    return t * v;
-}
-
-inline vec3 operator/ (const vec3& v, double t)
-{
-    return (1 / t) * v;
-}
-
-inline double dot(const vec3& u, const vec3& v) {
-    return u.e[0] * v.e[0]
-        + u.e[1] * v.e[1]
-        + u.e[2] * v.e[2];
-}
-
-inline vec3 cross(const vec3& u, const vec3& v) {
-    return vec3(u.e[1] * v.e[2] - u.e[2] * v.e[1],
-                u.e[2] * v.e[0] - u.e[0] * v.e[2],
-                u.e[0] * v.e[1] - u.e[1] * v.e[0]);
-}
-
-inline vec3 unitVectorLength(const vec3& v)
-{
-    return v / v.length();
-}
-
-#endif
 ```
-{: file="main.cpp"}
+{: file="math.hpp"}
+
+---
 
 ### 3.1 Color Utility Functions
 
 此外，我们创建一个`color.h`头文件，并定义一个utility函数，用于将单个像素的颜色写入standard output stream：
 
 ```c++
-// color.h
+#pragma once
 
-#ifndef COLOR_H
-#define COLOR_H
+#include <engine/math.hpp>
 
-#include "vec3.h"
-
-#include <iostream>
-
-using color = vec3;
-
-void writeColor(std::ostream& out, const color& pixelColor)
+namespace EngineCore
 {
-    double r = pixelColor.x();
-    double g = pixelColor.y();
-    double b = pixelColor.z();
+    using Color = Vec3;
 
-    // translate [0, 1] component values to byte range[0, 255]
-    int rByte = int(255.999 * r);
-    int gByte = int(255.999 * g);
-    int bByte = int(255.999 * b);
+    inline void writeColor(std::ostream& out, const Color& pixelColor)
+    {
+        auto r = pixelColor.x();
+        auto g = pixelColor.y();
+        auto b = pixelColor.z();
 
-    // write out pixel color components
-    out << rByte << ' ' << gByte << ' ' << bByte << '\n';
+        // write the translated [0,255] value of each color component
+        // ----------------------------------------------------------
+        int byteR = int(255.999 * r);
+        int byteG = int(255.999 * g);
+        int byteB = int(255.999 * b);
+
+        // write out to the ppm file
+        // -------------------------
+        out << byteR << ' ' << byteG << ' ' << byteB << '\n';
+    }
+
 }
-
-#endif
 ```
-{: file="color.h"}
+{: file="color.hpp"}
 
 现在，我们可以使用新的`vec3`类来修改我们`main`函数了：
 
