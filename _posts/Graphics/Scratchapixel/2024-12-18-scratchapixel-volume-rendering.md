@@ -1,7 +1,7 @@
 ---
 title: Scratchpixel Volume Rendering
 date: 2024-12-18 23:38 +0800
-categories: [Portfolio, Vulkan Renderer]
+categories: [Graphics, Scratchpixel]
 media_subpath: /assets/img/Graphics/Scratchapixel/
 math: true
 ---
@@ -268,4 +268,154 @@ float projPixWidth = 2 * tanf(M_PI / 180 * fov / (2 * imageWidth)) * tmin;
 其中，tmin是相机射线与volume相交处的距离。类似地，可以计算光线离开体时的投影像素宽度，并在`tmin`和`tmax`处对投影像素宽度进行线性插值，以便在沿着光线行进时设置步长。
 
 ---
+
+### Ray Marching: Getting it Right!
+
+在前面的章节中，我们只考虑了光束与构成介质的粒子之间的两种相互作用类型：**吸收**和**内散射**。但是，为了得到准确的结果，我们应该考虑四种类型。我们可以将它们分为两类。一类是光束穿过介质到达眼睛的过程中减弱其能量的相互作用。另一类是有助于增加其能量的相互作用。
+
+- 光束在通过volume传播到眼睛的过程中会因以下原因而**损失**能量：
+  - absorption：光线的一部分能量被组成volume的粒子吸收
+  - out-scattering：朝向眼睛传播的光在到达眼睛的途中也可能被散射出去
+- 光束在通过volume传播到眼睛的过程中会因以下原因而**获得**能量：
+  - emission
+  - in-scattering：一些最初并非朝着眼睛传播的光由于散射而被重新定向朝着眼睛传播
+
+![](voldev-interactions.png)
+
+在我们目前的Unity实现中，光线损失的能量只考虑到了吸收这种情况。现在，我们可以将散射同样考虑在内，也就是在应用Beer定律时，将散射系数与吸收系数相加，用$\sigma_t$表示，称为extinction coefficient。
+
+此外，考虑到内散射的贡献值与散射系数成正比，我们还需要将内散射乘以散射系数。
+
+最终我们的代码如下：
+
+```glsl
+float extinction = _Absorption + _Scatter;
+
+float transparency = 1;
+half3 result = 0;
+
+// compute each sample's transparency
+// ----------------------------------
+const float sampleTransparency = exp(-stepSize * extinction);
+
+// using forward ray marching
+// --------------------------
+for (int i = 0; i < steps; i++)
+{
+    // calculate the sample position
+    // -----------------------------
+    float t = t0 + stepSize * (i + 0.5);
+    float3 samplePos = rayOrigin + rayDirection * t;
+
+    // attenuate global transparency by each sample's transparency
+    // -----------------------------------------------------------
+    transparency *= sampleTransparency;
+
+    // in-scattering of this sample
+    // ----------------------------
+    float lightAttenuation = exp(-distance(samplePos, lightPos) * extinction);
+    float3 inScattering = lightAttenuation * lightColor * stepSize * _Scatter;
+
+    // add in-scattering to the result
+    // -------------------------------
+    result += inScattering * transparency;
+}
+
+// final color
+// -----------
+color.rgb = backgroundColor * transparency + result;
+return color;
+```
+{: add-lines="1, 8, 25-26"}
+
+---
+
+#### The Density Term
+
+目前为止，volume的密度是均一的，我们将这种volume称为**homogenous participating medium**。在现实世界中，如云与烟通常具有非均一的密度，我们称之为**heterogeneous participating medium**。
+
+我们定义一个密度变量，用于全局地缩放吸收与散射系数。另外，内散射的贡献值也需要乘以密度。
+
+```glsl
+const float sampleTransparency = exp(-stepSize * extinction * _Density);
+
+// using forward ray marching
+// --------------------------
+for (int i = 0; i < steps; i++)
+{
+    // calculate the sample position
+    // -----------------------------
+    float t = t0 + stepSize * (i + 0.5);
+    float3 samplePos = rayOrigin + rayDirection * t;
+    
+    // attenuate global transparency by each sample's transparency
+    // -----------------------------------------------------------
+    transparency *= sampleTransparency;
+
+    // in-scattering of this sample
+    // ----------------------------
+    float lightAttenuation = exp(-distance(samplePos, lightPos) * extinction * _Density);
+    float3 inScattering = lightAttenuation * lightColor * stepSize * _Scatter * _Density;
+
+    // add in-scattering to the result
+    // -------------------------------
+    result += inScattering * transparency;
+}
+```
+{: add-lines="1, 18-19"}
+
+---
+
+#### The Phase Function
+
+我们先来回顾一下内散射的计算公式如下：
+
+
+$$
+Li(x,\omega)=\sigma_s\int_{S^2}p(x, \omega, \omega')L(x, \omega')d\omega'
+$$
+
+
+其中，$x$表示采样点的位置，$\omega$表示观察方向，也就是步进算法中的射线方向，$\omega'$表示光线方向，$L(x, \omega')$表示光源原本的贡献值。此外，与常规的物体渲染不同，我们需要在整个球形上进行积分。
+
+与此对应的，我们的代码实现为：
+
+```glsl
+float lightAttenuation = exp(-distance(samplePos, lightPos) * extinction * _Density);
+float3 inScattering = lightAttenuation * lightColor * stepSize * _Scatter * _Density;
+```
+
+可见我们在代码中并没有实现公式中的$p(x, \omega, \omega')$项。这一项被称为**相位函数**。
+
+在**各向同性**的散射volume中，当光子与组成volume的粒子交互时，光子可以被散射到任意方向上。然而，大多数volume都倾向与在一个受限的方向范围内散射光线。我们将这种性质称为**各向异性**。相位函数用于描述散射光线的角度分布，在数学上返回了一个零到一之间的值。相位函数具有在其定义域上的积分必然为1的性质。
+
+最简单的相位函数来自于均一volume：
+
+
+$$
+f_p(x, \theta) = \frac{1}{4\pi}
+$$
+
+
+在渲染领域中，我们常用的各向异性的相位函数是**Henyey-Greenstein**函数：
+
+
+$$
+f_p(x, g, cos\theta)=\frac{1}{4\pi}\frac{1-g^2}{(1+g^2-2gcos\theta)^{3/2}}
+$$
+
+
+其中，$g$被称为**asymmetry factor**，范围为$[-1, 1]$：
+
+- 当$g>0$，绝大多数光线会向前散射
+- 当$g<0$，绝大多数光线会向后散射
+- 当$g = 0$时，**Henyey-Greenstein**函数则等价于$1/4\pi$，也就是各向同性的相位函数
+
+![](voldev-phasefuncplot.png)
+
+---
+
+#### Jittering the Sample Positions
+
+
 
