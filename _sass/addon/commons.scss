@@ -130,8 +130,13 @@ kbd {
 }
 
 hr {
-  border-color: var(--main-border-color);
-  opacity: 1;
+  // border-color: var(--main-border-color);
+  // opacity: 1;
+  // from https://github.com/jtchen2k/typora-theme-next/blob/master/next.css
+  background-image: repeating-linear-gradient(-45deg, #6b6b6b, #6b6b6b 4px, transparent 4px, transparent 8px);
+  border: 0;
+  height: 3px;
+  margin: 40px 0
 }
 
 footer {
