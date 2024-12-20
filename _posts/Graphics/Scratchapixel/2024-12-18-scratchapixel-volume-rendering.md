@@ -1,5 +1,5 @@
 ---
-title: Scratchpixel Volume Rendering
+title: Volume Rendering
 date: 2024-12-18 23:38 +0800
 categories: [Graphics, Scratchpixel]
 media_subpath: /assets/img/Graphics/Scratchapixel/

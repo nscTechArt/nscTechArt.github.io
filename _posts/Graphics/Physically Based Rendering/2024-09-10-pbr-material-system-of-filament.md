@@ -1,25 +1,25 @@
 ---
-title: Filament -- Material System
+title: Material System in Filament
 date: 2024-09-10 14:57 +0800
-categories: [Graphics, Filament]
-media_subpath: /assets/img/Graphics/filament/
+categories: [Graphics, Physical Based Rendering]
+media_subpath: /assets/img/Graphics/PhysicallyBasedRendering/
 math: true
 ---
 
-### Standard model
+### 1 Standard model
 
-我们将实现一个由BSDF双向散射分布函数描述的材质，其中BSDF本身由另外两个函数组成：BRDF双向反射函数与BTDF双向透射函数。由于我们要模拟常见的表面，所以我们在本系列博客中会侧重于BRDF。
+我们所要使用的材质系统在数学上由BSDF双向散射分布函数描述，而BSDF本身又由另外两个函数组成：BRDF双向反射函数与BTDF双向透射函数。由于我们的目标是对常见的表面进行建模，所有我们的标准模型会专注于BRDF，而忽视BTDF，或者在某种程度上近似BTDF，因此，我们的标准模型只能正确地模拟短均自由程的反射性、各向同性的电介质或导电表面。
 
 BRDF可以分为两个部分：
 
 - 漫反射部分，记为$f_d$
 - 镜面反射部分，记为$f_r$
 
-我们可以用下图来表示入射光线、表面法线与表面之间的关系（暂时忽略次表面散射）：
+如下图所示（暂时忽略次表面散射）：
 
 ![](diagram_fr_fd.png)
 
-我们也可以通过公式表示：
+BRDF模型通过公式表示为：
 
 
 $$
@@ -28,8 +28,9 @@ f(v,l)=f_d(v,l)+f_r(v,l)
 \end{equation}
 $$
 
-
 需要注意的是，这个公式表示的是来自单一方向的入射光的表面交互，完整的渲染方程需要我们在整个半球方向上进行积分。
+
+
 
 现实世界中的表面并不是平整的，我们需要一个能够描述光与不规则表面相互作用的模型。在BRDF中，我们引入微表面的概念，也就是说，物体的表面在微观上由大量随机排列的微小面microfacet组成。下图展示了微表面模型的概念：
 
@@ -43,9 +44,13 @@ $$
 
 ![](diagram_shadowing_masking.png)
 
+
+
 在微表面BRDF模型中，粗糙度描述了在微观层面上的粗糙或光滑程度，表面越光滑，则满足微表面可见条件的微表面就会越多，从而让表面更光滑，表面越粗糙，就会导致镜面反射的高亮模糊，这个过程如下图所示：
 
 ![](diagram_roughness.png)
+
+
 
 下面是用于描述微表面模型的公式：
 
@@ -66,9 +71,15 @@ $$
 
 ![](diagram_micro_vs_macro.png)
 
+从图中我们可以看出，在宏观层面上，我们可以认为表面是平坦的，我们可以假设光照计算发生在单一方向的光源照射的表面上一点，这样能够有助于简化渲染方程。
+
+而在微观层面上，表面是不平坦的，我们也不能再认为只有一条单一的光线，而是应该假设存在一束方向平行的光线。在微表面理论中，这束光线会被散射到各个方向上，由此我们必须在半球上对表面的交互进行积分，也就是图中所标注的$\Omega_m$。
+
+但是为每个片段都进行半球上的积分显然是不可行的，所以不管是漫反射还是镜面反射，我们都需要使用积分的近似。
+
 ---
 
-### Dielectrics and conductors
+### 2 Dielectrics and conductors
 
 在深入BRDF的实现之前，我们还需要了解一下金属与非金属之间的区别。
 
@@ -76,7 +87,7 @@ $$
 
 ![](diagram_fr_fd.png)
 
-但实际上，这是对二者交互作用的简化，部分入射光会穿透表面，然后在物体内部散射，部分散射的光线还会以漫反射的形式再次从表面散射出，如下图所示：
+但实际上，这是对二者交互作用的简化。在真实的物理世界中，部分入射光会穿透表面，然后在物体内部散射，而其中部分散射的光线还会以漫反射的形式再次从表面散射出，如下图所示：
 
 ![](diagram_scattering.png)
 
@@ -86,13 +97,13 @@ $$
 
 ---
 
-### Energy conservation
+### 3 Energy conservation
 
 在PBR渲染中，能量守恒是一个关键的概念。在能量守恒的BRDF模型中，镜面反射与漫反射的能量之和要小于入射能量的总和。
 
 ---
 
-### Specular BRDF
+### 4 Specular BRDF
 
 对于镜面反射的部分，我们所使用基于Cook-Torrance的微表面模型，公式如下：
 
@@ -106,9 +117,9 @@ $$
 
 由于我们需要在实时渲染中实现这个模型，所以我们会使用$D$，$G$，$F$的近似公式进行计算
 
-#### D: Normal distribution function 
+#### 4.1 D: Normal distribution function
 
-GGX使用了一种更接近现实的微表面法线分布函数（NDF），能够模拟具有粗糙表面的物体。其分布函数具有较长的尾部（"heavy tail"），这使得它能够更好地表现表面粗糙度较低但仍有高光区域的物体。公式如下：
+GGX/Trowbridge-Reitz模型使用了一种更接近现实的微表面法线分布函数，能够模拟具有粗糙表面的物体。其分布函数具有较长的尾部（"heavy tail"），这使得它能够更好地表现表面粗糙度较低但仍有高光区域的物体。公式如下：
 
 
 $$
@@ -116,6 +127,8 @@ D_{GGX}(h,\alpha)=\frac{\alpha^2}{\pi((n\cdot h)^2(\alpha^2-1)+1)^2}
 $$
 
 
+
+其中，$h$表示入射方向与观察方向的半程向量，而$\alpha$则表示表面的粗糙度的平方。
 
 #### G: Geometric shadowing
 
@@ -135,7 +148,7 @@ G_1(v,\alpha)=G_{GGX}(v,\alpha)=\frac{2(n\cdot v)}{n\cdot v + \sqrt{\alpha^2+(1-
 $$
 
 
-这样的话，我们就可以给出完整的是Smith公式：
+这样的话，我们就可以给出完整的Smith公式：
 
 
 $$
