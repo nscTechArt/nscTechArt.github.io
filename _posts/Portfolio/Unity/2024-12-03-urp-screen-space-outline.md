@@ -1,5 +1,5 @@
 ---
-title: URP中的简易Translucent材质
+title: URP中实现屏幕空间描边
 date: 2024-12-03 09:48 +0800
 categories: [Portfolio, Unity]
 media_subpath: /assets/img/Portfolio/Unity/

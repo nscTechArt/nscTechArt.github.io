@@ -6,55 +6,31 @@ media_subpath: /assets/img/Graphics/LearnVulkan/
 math: false
 ---
 
+本篇博客是[《The Modern Vulkan Cookbook》](https://www.packtpub.com/en-us/product/the-modern-vulkan-cookbook-9781803239989)的第一章的读书笔记。主要涵盖了Vulkan中的一些核心概念。
+
 在本篇博客中，我们将会绘制一个着色的三角形，其中三角形的顶点属性会直接写在vertex shader中。在完成三角形渲染的过程中，我们将涵盖Vulkan中的大部分基础对象，并且会介绍如何启动与GPU的通信，如何创建与管理Vulkan中的对象，以及如何向GPU发出渲染命令。
 
-在本篇博客中，我们将会涵盖以下内容：
+---
 
-### Learning about Vulkan objects
+### Vulkan Objects
 
-在本小节，我们将会了解什么是Vulkan的对象，以及Vulkan对象之间是如何相互联系的
-
-#### Getting ready
+在本小节，我们将会了解什么是Vulkan的对象，以及Vulkan对象之间是如何相互联系的。
 
 Vulkan中的对象是一些“黑盒”的句柄，并且对象类型都以`Vk`为前缀命名，例如`VkInstance`，`VkDevice`。有些对象需要其他对象的实例来创建或分配。**这种依赖关系为对象的创建建立了一种隐式的逻辑顺序。**比方说，只有`VkInstance`对象创建后，我们才能创建`VkPhysicalDevice`对象。
 
-#### How to do it...
+下图总结了Vulkan中最重要的一些对象，以及它们之间的联系：
 
 ![](B18491_01_01.png)
 
-上图总结了Vulkan中最重要的一些对象，以及它们之间的联系，其中：
+其中：
 
 1. **实线箭头表示显式的依赖关系**：一个对象需要对其用实线箭头指向的对象进行引用。例如，`VkDevice`需要`VkPhysicalDevice`的索引，而`VkBufferView`需要`VkBuffer`和`VkDevice`的索引。
 2. **虚线箭头表示隐式的依赖关系：**以`VkQueue`为例，一个`VkQueue`需要`VkDevice`的索引，但是并不显式地需要`VkPhysicalDevice`对象的索引。之所以说它们的关系是隐式的，是因为`VkQueue`只是一个队列族中的队列索引值，而队列族可以直接从`VkPhysicalDevice`枚举获得
 3. **对象可以从另一个对象中分配得到**：如`VkCommandBuffer`可以从`VkCommandPool`中分配得到
 
-我们的系列博客会大致按照图表中从上到下的顺序，依次创建所有对象，并构建一个精简的Vulkan应用程序。
-
 ---
 
-### Using Volk to load Vulkan functions and extensions
-
-Volk是一个开源库，提供了跨平台载入Vulkan函数的功能。
-
-#### Getting ready
-
-[zeux/volk: Meta loader for Vulkan API (github.com)](https://github.com/zeux/volk)
-
-Volk提供了CMake构建选项，我们只需要clone到项目的*thirdparty*目录中，并在构建时包含Volk即可。
-
-#### How to do it...
-
-Volk会自动载入Vulkan的函数指针，同时也会自动完成对Vulkan库的连接，所以我们无需再考虑这个步骤。
-
-要使用Volk，我们需要遵循下面三个步骤：
-
-1. 在应用程序初始化时，调用`volkInitialize()`，然后再调用其他任何Vulkan函数。如果该函数返回失败，则表示系统中没有安装Vulkan loader。
-2. 创建好`VkInstance`后，调用`volkLoadInstance()`，它会用`vkGetInstanceProcAddr`获取的函数替换全局函数指针
-3. 创建好VkDevice后，调用`volkLoadDevice()`，作用同上
-
----
-
-### Using Vulkan extensions correctly
+### Vulkan Extensions
 
 Vulkan高度依赖于扩展，也就是对Vulkan核心API功能和类型的补充。如下图所示：
 ![](B18491_01_02.jpg)
@@ -87,17 +63,11 @@ if (isEnabledForDevice(device, VK_KHR_WIN32_SURFACE_EXTENSION_NAME)) {
 
 ---
 
-### Using the Validation Layer for error checking
+### Vulkan Layer
 
-我们来了解一下Vulkan中的layer是什么，以及layer中的消息是如何呈现出来的
+Layer由Vulkan SDK提供，无需另外的配置工作。
 
-#### Getting ready
-
-Layer由Vulkan SDK提供，无需另外的配置工作
-
-#### How to do it...
-
-Layer是可以被插入到调用链中的Vulkan函数实现，能够拦截API的entry point，它有三个作用：
+Layer可以被插入到调用链中的Vulkan函数实现，能够拦截API的entry point，它有三个作用：
 
 - 检测报错
 - 评估性能
@@ -109,108 +79,23 @@ Vulkan SDK提供了一些满足**Plug and Play**特性的layer，所以，我们
 
 ---
 
-### Enumerating available instance layers
+### Initializing the Vulkan Instance
 
-想要启用实例级别的layer，我们只需要在创建实例时提供`const char*`格式的layer命名即可。但是，在启用之前，我们还是需要确保哪些layer是可用的。
+`VkInstance`是我们要创建的第一个对象。它表示我们的应用程序与Vulkan运行时之间的链接，所以在应用程序中有且只有一个`VkInstance`。
 
-我们来了解一下如何枚举出可用的实例级别的layer，以及如何将它们转换为字符串。
-
-#### Getting ready
-
-这一部分代码会被封装在`Context`类中，该类涵盖了大多数的初始化与Vulkan对象创建的函数。
-
-#### How to do it...
-
-1. 首先，我们调用函数`vkEnumerateInstanceLayerProperties`获取可用的layer数量，然后根据该数量创建一个`VkLayerProperties`数组，然后再次调用`vkEnumerateInstanceLayerProperties`，获取可用的级别并填充到`VkLayerProperties`数组中。
-
-   ```c++
-   uint32_t instanceLayerCount {0};
-   VK_CHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr));
-   std::vector<VkLayerProperties> layers(instanceLayerCount);
-   VK_CHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, layers.data()));
-   ```
-
-2. 将枚举得到可用的layer的命名转换为字符串：
-
-   ```c++
-   std::vector<std::string> availableLayers;
-   std::transform(layers.being(), layers.end(), std::back_insert(availableLayers), 
-   [](const VkLayerProperties& poperties) {return properties.layerName;});
-   ```
-
-3. 最后，我们需要从可用的layer中筛选出我们需要的layer。
-
-   ```c++
-   std::unordered_set<std::string> filterExtensions(
-       std::vector<std::string> availableExtensions,
-       std::vector<std::string> requestedExtensions) {
-       std::sort(availableExtensions.begin(),
-                 availableExtensions.end());
-       std::sort(requestedExtensions.begin(),
-                 requestedExtensions.end());
-       std::vector<std::string> result;
-       std::set_intersection(
-           availableExtensions.begin(),
-           availableExtensions.end(),
-           requestedExtensions.begin(),
-           requestedExtensions.end(),
-           std::back_inserter(result));
-       return std::unordered_set<std::string>(
-           result.begin(), result.end());
-   }
-   ```
-
-获取实例级别的扩展的过程也是类似的，这里就不再展开描述了。
+`VkInstance`存储了使用Vulkan所需要的与应用程序相关（或者说特定于应用程序层面）的特定状态。因此，在创建`VkInstance`时，我们必须指定要启用的层（如Validation Layer）和扩展。
 
 ---
 
-### Initializing the Vulkan instance
+### Creating a Surface
 
-Vulkan实例是我们要创建的第一个对象。它表示我们的应用程序与Vulkan运行时之间的链接，所以在应用程序中有且只有一个`VkInstance`。
-
-存储了使用Vulkan所需要的与应用程序相关（或者说特定于应用程序层面）的特定状态。因此，在创建`VkInstance`时，我们必须指定要启用的层（如Validation Layer）和扩展。
-
-创建过程也很简单，我们需要分别创建一个存储应用程序相关信息的结构体
-
-```c++
-const VkApplicationInfo applicationInfo_ = 
-{
-    .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-    .pApplicationName = "Essential Graphics With Vulkan",
-    .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-    .apiVersion = VK_API_VERSION_1_3,
-};
-```
-
-以及存储Vulkan实例信息的结构体
-
-```c++
-const VkInstanceCreateInfo instanceInfo = 
-{
-    .sType =
-        VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-    .pApplicationInfo = &applicationInfo_,
-    .enabledLayerCount = static_cast<uint32_t>(
-        requestedLayers.size()),
-    .ppEnabledLayerNames = requestedLayers.data(),
-    .enabledExtensionCount = static_cast<uint32_t>(
-        instanceExtensions.size()),
-    .ppEnabledExtensionNames = instanceExtensions.data(),
-};
-VkInstance instance_{VK_NULL_HANDLE};
-VK_CHECK(vkCreateInstance(&instanceInfo, nullptr,
-                          &instance_));
-```
-
----
-
-### Creating a surface
-
-与OpenGL相同，将最终的渲染结果呈现到屏幕上需要窗口系统的支持，并且这个过程是与平台相关的。处于这个原因，Vulkan核心API并没有提供呈现渲染结果的功能，而是将相关的函数与类型以扩展的形式推出。在我们的系列博客中，我们不会涉及Windows平台以外的相关知识，所以我们需要使用到如下扩展：`VK_KHR_surface`，`VK_KHR_swapchain`以及`VK_KHR_win32_surface`
+与OpenGL相同，将最终的渲染结果呈现到屏幕上需要窗口系统的支持，并且这个过程是与平台相关的。出于这个原因，Vulkan核心API并没有提供呈现渲染结果的功能，而是将相关的函数与类型以扩展的形式推出。在我们的系列博客中，我们不会涉及Windows平台以外的相关知识，所以我们需要使用到如下扩展：`VK_KHR_surface`，`VK_KHR_swapchain`以及`VK_KHR_win32_surface`
 
 #### Getting ready
 
-将渲染图像呈现到屏幕上，首先我们需要创建一个`VkSurfaceKHR`对象，它与操作系统的窗口系统接口相结合，运行Vulkan通过*surface*这个概念渲染图像。由于我们从物理设备中预留队列需要使用到`VkSurfaceKHR`对象，所以`VkSurfaceKHR`的创建需要在`VkInstance`创建后以及`VkPhysicalDevice`创建前完成。
+将渲染图像呈现到屏幕上，首先我们需要创建一个`VkSurfaceKHR`对象，它与操作系统的窗口系统接口相结合，在运行Vulkan程序时通过能够*surface*这个概念渲染图像。
+
+此外，由于我们从物理设备中预留队列时需要使用到`VkSurfaceKHR`对象，所以`VkSurfaceKHR`的创建需要在`VkInstance`创建后以及`VkPhysicalDevice`创建前完成。
 
 #### How to do it...
 
@@ -246,88 +131,15 @@ VK_CHECK(vkCreateInstance(&instanceInfo, nullptr,
 
 ---
 
-### Enumerating Vulkan physical devices
+### Enumerating Vulkan Physical Devices
 
-我们的系统中可能存在多个支持Vulkan的GPU，我们需要从中选择一个最能满足我们需求的设备。
+ 设备中可能存在多个支持Vulkan API的GPU，通常来说，我们需要只从中选择一个最能满足我们需求的设备即可。
 
 调用`vkEnumeratePhysicalDevices`，我们能够从`VkInstance`中枚举出所有可用的物理设备，接着我们通过`vkGetPhysicalDeviceProperties`和`vkGetPhysicalDeviceFeatures`，分别检视给定物理设备所具有的属性与特性，判断是否能够满足我们的需求。最终筛选得到的`VkPhysicalDevice`将用于创建`VkDevice`和获取队列等后续操作。
 
-#### Getting ready
-
-我们会将物理设备及其属性等封装到`VulkanCore::PhysicalDevice`这个类中
-
-#### How to do it...
-
-简单起见，我们直接获取第一个可用的物理设备：
-
-```c++
-std::vector<PhysicalDevice> Context::enumeratePhysicalDevices(const std::vector<std::string>& requestedExtensions) const 
-{
-    uint32_t deviceCount{0};
-
-    VK_CHECK(vkEnumeratePhysicalDevices(instance_, &deviceCount, nullptr));
-    ASSERT(deviceCount > 0,"No Vulkan devices found");
-
-    std::vector<VkPhysicalDevice> devices(deviceCount);
-    VK_CHECK(vkEnumeratePhysicalDevices(instance_, &deviceCount, devices.data()));
-
-    std::vector<PhysicalDevice> physicalDevices;
-    for (const auto device : devices)
-    {
-        physicalDevices.emplace_back(
-            PhysicalDevice(device, surface_, requestedExtensions, printEnumerations_));
-    }
-
-    return physicalDevices;
-}
-```
-
 ---
 
-### Enumerating physical device extensions
-
-除了实例级别的扩展，Vulkan同样提供了物理设备级别的扩展，这些扩展的可用性会因特定的物理设备与驱动而异。所以，对于需要的设备级别的扩展，我们需要检测其可用性，并显性地启用。
-
-#### Getting ready
-
-同样的，我们通过`VulkanCore::PhysicalDevice`这个类来枚举和管理设备级别的扩展。
-
-#### How to do it...
-
-获取设备级别的扩展很简单，我们同样实现了将命名转换为字符串的函数
-
-1. 通过`vkEnumerateDeviceExtensionsProperties`枚举所有的物理设备级别的扩展，我们会创建一个`VkExtensionProperties`数组，该结构体包含了扩展名、版本和扩展用途的简要描述
-
-   ```c++
-   uint32 propertyCount {0};
-   VK_CHECK(vkEnumerateDeviceExtensionProperties(
-       physicalDevice, nullptr, &propertyCount, nullptr));
-   
-   std::vector<VkExtensionProperties> properties(propertyCount);
-   VK_CHECK(vkEnumerateDeviceExtensionProperties(
-       physicalDevice, nullptr, &propertyCount, properties.data()));
-   ```
-
-2. 将扩展命名转换为`std::string`，在`VkExtensionProperties`数组仅保留扩展名：
-
-   ```c++
-   std::transform(
-   	properties.begin(), properties.end(),
-   	std::back_inserter(extensions), [](const VkExtensionProperties& property)
-       {return std::string(property.extensionName);}
-   ;)
-   ```
-
-3. 最后，我们只保留需要使用的扩展：
-
-   ```c++
-   enabledExtensions = util：：filterExtensions(extensions, requestedExtensions);
-   ```
-   
-
----
-
-### Caching the properties of queue families
+### Caching the Properties of Queue Families
 
 在Vulkan中，一个物理设备可以有一个或多个队列族，每个队列族表示一组具有相似属性的队列，每个队列族支持一组特定的可以并行执行的操作或命令，如下图所示：
 
