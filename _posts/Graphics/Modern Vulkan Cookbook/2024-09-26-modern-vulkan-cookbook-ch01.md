@@ -8,8 +8,6 @@ math: false
 
 本篇博客是[《The Modern Vulkan Cookbook》](https://www.packtpub.com/en-us/product/the-modern-vulkan-cookbook-9781803239989)的第一章的读书笔记。主要涵盖了Vulkan中的一些核心概念。
 
-在本篇博客中，我们将会绘制一个着色的三角形，其中三角形的顶点属性会直接写在vertex shader中。在完成三角形渲染的过程中，我们将涵盖Vulkan中的大部分基础对象，并且会介绍如何启动与GPU的通信，如何创建与管理Vulkan中的对象，以及如何向GPU发出渲染命令。
-
 ---
 
 ### Vulkan Objects
@@ -139,205 +137,39 @@ Vulkan SDK提供了一些满足**Plug and Play**特性的layer，所以，我们
 
 ---
 
-### Caching the Properties of Queue Families
+### Queue Families
 
 在Vulkan中，一个物理设备可以有一个或多个队列族，每个队列族表示一组具有相似属性的队列，每个队列族支持一组特定的可以并行执行的操作或命令，如下图所示：
 
 ![](B18491_01_03.jpg)
 
-#### Getting ready
+在创建`VkDevice`对象时，我们需要指定要使用的队列族，以及每个队列族中的队列数量。为了能够渲染并呈现渲染结果，我们通常需要至少一个负责执行图形指令的图形队列族。除此以外，我们还可能需要一个计算队列族用于执行计算工作载荷，以及一个传递队列族用于传递数据。
 
-在本系列博客中，我们将队列族及其属性和`VkPhysicalDevice`对象一起封装在`VulkanCore::PhysicalDevice`这个类，便于操作与管理。
-
-#### How to do it...
-
-每个队列族都有一组自己的属性，例如队列数量、可执行的操作的类型，以及队列的优先级。当我们创建一个`VkDevice`对象时，我们就需要指定我们要使用的队列族和每种类型要使用的队列数量。
-
-1. 通过`vkGetPhysicalDeviceQueueFamilityProperties`，获取队列族的可用性以及属性：
-
-   ```c++
-   uint32_t queueFamilyCount {0};
-   
-   vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
-   queueFamilyProperties.reszie(queueFamilyCount);
-   
-   vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
-   ```
+当我们创建好`VkDevice`对象后，我们还需要通过获取`VkDevice`对象所使用到的队列的句柄。当我们提交command buffer时，我们需要用到这些句柄。
 
 ---
 
-### Reserving queue families
+### Creating a Vulkan Logical Device
 
-我们前面提到，在创建`VkDevice`对象时，我们需要指定要使用的队列族，以及每个队列族中的队列数量。
-
-为了能够渲染并呈现渲染结果，我们通常需要至少一个负责执行图形指令的图形队列族。除此以外，我们还可能需要一个计算队列族用于执行计算工作载荷，以及一个传递队列族用于传递数据
-
-在本小节中，我们将学习如何根据所需的队列族的属性找到匹配的队列族，以及如何选择出一个支持呈现功能的队列族。
-
-#### Getting ready
-
-不用多说，这部分同样用`VulkanCore::PhysicalDevice`类进行管理
-
-#### How to do it...
-
-我们知道，在创建VkDevice之前，我们首先需要获取想要使用的队列族的索引。为此，我们在`VulkanCore::PhysicalDevice`类实现一个`reserveQueues`函数，该函数需要我们提供想要使用的队列的类型作为参数。另外，我们还需要为该函数提供`VkSurface`对象的句柄，用于验证某个队列是否支持呈现这一功能。
-
-1. 在前面的环节中，我们已经从物理设备中获取了可用的队列族属性，并存储在`queueFamilyProperties`数组中。现在，我们需要遍历该数组，判断是否当前的队列族属性满足我们的队列需求，如果是的话，就可以保留当前索引，此索引也就是我们会传递给`VkDevice`的索引。
-
-   ```c++
-   uint32_t graphicsFamilyIndex {UINT32_MAX};
-   uint32_t presentationFamilyIndex[UINT32_MAX];
-   for (uint32_t queueFamilyIndex = 0; 
-        queueFamilyIndex < queueFamilyProperties.size() && requestedQueueType != 0;
-        queueFamilyIndex++)
-   {
-       if (graphicsFamilyIndex == UINT32_MAX && 
-           (queueFamilyProperties[queueFamilyIndex].queueFlags & VK_QUEUE_GRAPHICS_BIT))
-       {
-           graphicsFamilyIndex= queueFamilyIndex;
-       }
-   }
-   ```
-
-2. 判断一个队列组能够支持呈现的功能，我们可以使用`vkGetPhysicalDeviceSurfaceSupportKHR`函数
-
-   ```c++
-   #if defined(VK_KHR_surface)
-   	if (enabledInstanceExtensions.contains(VK_KHR_SURFACE_EXTENSION_NAME)
-   	{
-   		if (presentationFamilyIndex == UINT32_MAX && surface != VK_NULL_HANDLE)
-           {
-               VkBool32 supportsPresent {VK_FALSE};
-               vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndex, surface, &supportsPresent);
-               if (supportsPresent == VK_TRUE)
-                   presentFamilyIndex = queueFamilyIndex;
-                
-           }
-   	}
-   #endif 
-   }
-   ```
-
-3. 其他类型的队列族索引也可以通过类似的方式获取。
-
----
-
-### Creating a Vulkan logical device
-
-`VkDevice`对象是一个物理设备的逻辑上的表示方式，我们可以简要归纳出以下几点
+`VkDevice`对象是一个物理设备的逻辑上的表示方式，我们可以简要归纳出以下几点：
 
 - 所有的图形与计算操作需要获取`VkDevice`对象的引用
-- `VkDevice`可以通过队列来访问并获取GPU的功能，其中，队列用于想GPU提交命令，如绘制和传递内存数据
+- `VkDevice`可以通过队列来访问并获取GPU的功能，其中，队列用于向GPU提交命令，如绘制和传递内存数据
 - 通过`VkDevice`，我们可以获取到一些其他的Vulkan对象，如管线，buffer，图像。
-
-#### Getting ready
-
-在本系列博客中，我们用`VulkanCore::Context`类来表示一个Vulkan逻辑设备对象
-
-#### How to do it...
-
-为了创建一个`VkDevice`对象，我们需要提供一个`VkPhysicalDevice`对象和想要使用的队列族的索引，对于后者，我们可以这些信息填充到`VkDeviceQUeueCreateInfo`中，同样填充到这个结构体中的信息还包括每个队列族中的数量和相对的优先值。
-
-1. 绝大多数情况下，每个队列族我们会使用一个队列，并且将其优先值设置为`1`
-
-   ```c++
-   auto physicalDevice = enumeratePhysicalDevices(requestedExtensions)[0];
-   const std::vector<uint32_t> familyIndices = physicalDevice.reservedFamilies();
-   
-   std::vector<VkDeviceQueueCreateInfo> queueCreatInfos;
-   float priority {1.0f};
-   
-   for (const auto& queueFamilyIndex : familyIndices)
-   {
-       queueCreateInfos.emplace_back(
-           VkDeviceQueueInfo
-           {
-               .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-               .queueFamilyIndex = queueFamilyIndex,
-               .queueCount = 1,
-               .pQueuePriorities = &priority,
-           });
-   }
-   ```
-
-2. 现在，我们有了一切创建`VkDevice`对象所需要的信息：
-
-   ```c++
-   std::vector<const char*> deviceExtentions(physicalDevice.enabledExtensions.size());
-   std::transform(
-   	physicalDevice.enabledExtensions.begin(),
-   	physicalDevice.enabledExtensions.end(),
-   	deviceExtensions.begin(), 
-       std::men_fn(&std::string::c_str)
-   );
-   
-   const VkDeviceCreaterInfo creatInfo =
-   {
-       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-       .queueCraeteInfoCount = static_cast<uint32_t>(queueCreatInfos.size()),
-       .pQueueCreateInfo = queueCreatInfos.data(),
-       .enabledLayerCount = static_cast<uint32_t>(requesedLayers.size()),
-       .ppEnabledLayerNames = requesedLayers.data(),
-       .enableExtensionsCount = static_cast<uint32_t>(deviceExtentsions.size()),
-       .ppEnabledExtensionNames = deviceExtentsions.data(),
-   };
-   VK_CHECK(vkCreateDevice(physicalDevice.vkPhysicalDevice(), &createInfo, nullptr, &device));
-   ```
 
 `VkDevice`几乎是Vulkan中最重要的一个对象，创建绝大多数的Vulkan对象都需要获取`VkDevice`的引用。
 
 ---
 
-### Retrieving the queue object handle
-
-当我们创建好`VkDevice`对象后，我们还需要通过获取`VkDevice`对象所使用的队列的句柄。当我们提交command buffer时，我们需要用到这个句柄。
-
-#### Getting ready
-
-在本系列博客中，所有获取的队列都会被存储在`VulkanCore::Context`类中，这个类会维护每种类型的队列，包括图形、计算、传递和稀疏，以及一个特殊的用于呈现的队列。
-
-#### How to do it...
-
-获取队列的句柄很简单，我们只需要传递队列族的索引和队列的索引即可
-
-```c++
-VkQueue queue {VK_NULL_HANDLE};
-vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
-```
-
----
-
-### Creating a command pool
+### Creating a Command Pool
 
 在Vulkan中，command buffer是一个容器，能够记录在GPU上执行的图形与计算命令。所以，当我们想要记录命令时，我们需要分配一个command buffer，然后使用`vkCmd*`这一族函数将命令记录下来。当记录完成后，我们就可以将command buffer提交给命令队列执行。
 
-我们在本小节中会创建一个用于分配command buffer的命令池对象。该对象需要通过`VkDevice`对象创建，同时与一个特定的队列族相关联。
-
-#### Getting ready
-
-我们将命令池以及相应的分配与提交都封装在`VulkanCore::CommandQueueManager`这个类中。
-
-#### How to do it...
-
-创建命令池很简单，我们需要队列族索引与一个flags，在我们的案例中是`VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT`，表示从这个命令池中分配的每个command buffer都可能会通过`vkCmdBeginCommandBuffer`单独或隐式地调用
-
-```c++
-uint32_t queueFamilyIndex; // valiad queue family index
-const VkCommandPoolCreateInfo commandPoolInfo
-{
-    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    .queueFamilyIndex = queueFamilyIndex,
-};
-VkCommandPool commandPool {VK_NULL_HANDLE};
-VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
-```
-
-有了`VkCommandPool`后，我们就可以开始分配command buffer了
+`VkCommandPool`是一个用于分配command buffer的命令池对象。该对象需要通过`VkDevice`对象创建，同时与一个特定的队列族相关联。
 
 ---
 
-### Allocating, recording, and submitting commands
+### Allocating, Recording, and Submitting Commands
 
 我们先简单梳理一下使用command buffer的过程：
 
@@ -347,12 +179,6 @@ VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
 4. 通过`vkQueueSubmit`将该command buffer提交到设备中以执行
 
 ![](vkcommands.png)
-
-在本小节中，我们将深入这一过程的细节
-
-#### Getting ready
-
-同样，所有相关的代码会实现在`VulkanCore::CommandQueueManager`这个类中。
 
 #### How to do it...
 
@@ -432,12 +258,6 @@ VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
 
 我们将在本小节中了解，如何在重复使用command buffer的同时，避免应用程序与GPU之间的竞争。
 
-#### Getting ready
-
-虽然我们将Command buffer相关的代码封装在了`VulkanCore::CommandQueueManager`这个类中，但是该类并不会负责处理command buffer的同步，而是提供了一些帮助我们实现同步的函数，如`goToNextCmdBuffer`, `waitUntilsSubmitIsComplete`, `waitUtilAllSubmitsAreComplete`
-
-#### How to do it...
-
 command buffer的使用可以分为两种方法，我们分别讨论。
 
 **创建一个command buffer并不限期地重复使用**。在这种情况中，一旦我们提交了command buffer，我们就需要等待它被处理完成，然后才能开始记录新的命令。而判断处理完成的方法是检查与其关联的`VkFence`的状态
@@ -462,7 +282,7 @@ command buffer的使用可以分为两种方法，我们分别讨论。
 
 ---
 
-### Creating render passes
+### Creating Render Passes
 
 **在Vulkan中，render pass是用于描述渲染过程的核心概念，它定义了渲染中的各种阶段、使用的附件、以及这些附件在渲染过程中如何读取和写入。**其中，附件是在render pass中作为渲染目标的图像的引用，它包括颜色附件、深度附加和模板附件。下图展示了render pass对象所包含的内容：
 
