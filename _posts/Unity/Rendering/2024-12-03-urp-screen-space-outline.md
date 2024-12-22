@@ -54,6 +54,8 @@ output.uvs[3] = output.texcoord + texelSize * float2(halfWidthCeil,  halfWidthFl
 
 ### 代码
 
+[Github仓库地址](https://github.com/nscTechArt/URP-Screen-Space-Outline)
+
 #### ScreenSpaceOutline.cs
 
 用于创建Volume组件，以便控制描边的宽度与颜色
