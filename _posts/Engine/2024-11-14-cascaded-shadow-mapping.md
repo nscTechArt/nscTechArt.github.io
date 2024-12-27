@@ -1,9 +1,9 @@
 ---
 title: Cascade Shadow Mapping
 date: 2024-11-14 11:09 +0800
-categories: [Engine, Evnia Engine Developing]
-media_subpath: /assets/img/Engine/evnia/
-math: false
+categories: [Graphics, Shadows]
+media_subpath: /assets/img/Graphics/24-11-14/
+math: true
 ---
 
 传统的shadow mapping技术存在一些缺点：
