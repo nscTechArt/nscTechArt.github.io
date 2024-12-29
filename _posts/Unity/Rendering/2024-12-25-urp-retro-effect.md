@@ -24,7 +24,7 @@ Color Bleed是指颜色信息由于VHS系统中的处理或信号传输问题而
 
 #### 实现过程
 
-Color Bleed的核心效果是向物体边缘渗透出的模糊边缘色，在这里我们可以使用dual blur框架以减少性能开销，同时在降采样过程中，使用在水平与竖直方向上具有不同的偏移值的采样点。
+Color Bleed的核心效果是向物体边缘渗透出的模糊边缘色，在这里我们可以使用dual blur框架以减少性能开销，同时在降采样过程中，使用在水平与竖直方向上具有不同的偏移值的采样点。有关dual blur可以查看我的另一篇[博客](https://lovewithyou.tech/posts/urp-dual-kawase-blur/)
 
 
 
