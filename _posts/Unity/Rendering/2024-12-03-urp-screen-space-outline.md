@@ -2,6 +2,7 @@
 title: URP中实现屏幕空间描边
 date: 2024-12-03 09:48 +0800
 categories: [Unity, Rendering]
+tags: [Unity, Outlines]
 media_subpath: /assets/img/Unity/12-03
 ---
 
