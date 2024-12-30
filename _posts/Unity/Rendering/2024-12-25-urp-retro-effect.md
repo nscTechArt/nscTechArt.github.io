@@ -6,6 +6,10 @@ media_subpath: /assets/img/Unity/24-12-25
 math: true
 ---
 
+### 效果演示
+
+{% include embed/video.html src='URP VHS Retro Effects.mp4' autoplay=true loop=true %}
+
 VHS风格可以简单概括为上个世纪80年代和90年代初期录像带播放的视觉效果，通常包括颗粒感、色彩失真、扫描线等特征等较为明显的特征，下面是一些符合VHS风格的图片：
 
 ![](VHS-footage.webp)
@@ -24,8 +28,124 @@ Color Bleed是指颜色信息由于VHS系统中的处理或信号传输问题而
 
 #### 实现过程
 
-Color Bleed的核心效果是向物体边缘渗透出的模糊边缘色，在这里我们可以使用dual blur框架以减少性能开销，同时在降采样过程中，使用在水平与竖直方向上具有不同的偏移值的采样点。有关dual blur可以查看我的另一篇[博客](https://lovewithyou.tech/posts/urp-dual-kawase-blur/)
+Color Bleed的核心效果是向物体边缘渗透出的模糊边缘色，在这里我们可以使用dual blur框架以减少性能开销，关于dual blur可以查看我的另一篇[博客](https://loveforyou.tech/posts/urp-dual-kawase-blur/)。
 
+在降采样过程中，使用在水平与竖直方向上具有不同的偏移值的采样点：
+
+```glsl
+float left = -1 - _BlurBias;
+float right = 1 - _BlurBias;
+float2 blurOffset = _MainTex_TexelSize.xy * float2(1, 0.5);
+output.uvs[0] = input.uv + float2(blurOffset.x * left,  -blurOffset.y);
+output.uvs[1] = input.uv + float2(blurOffset.x * right, -blurOffset.y);
+output.uvs[2] = input.uv + float2(blurOffset.x * left,   blurOffset.y);
+output.uvs[3] = input.uv + float2(blurOffset.x * right,  blurOffset.y);
+```
+{: file="ColorBleed.shader"}
+
+在升采样时，无需做进一步模糊，只需要根据一定权重做常规的alpha混合即可：
+
+```glsl
+half4 BlurUpSampleFragment(Varyings input) : SV_Target
+{
+    half4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
+    color.a = _UpsampleFactor;
+    return color;
+}
+```
+{: file="ColorBleed.shader"}
+
+当我们获取到模糊纹理后，就可以根据模糊强度在模糊纹理与场景色之间进行混合。但是，在VHS效果的前提下，我们需要考虑到VHS系统的工作原理。**VHS基于亮度与色度分离的信号传输方式，而color bleed现象是色度通道之间的扩散导致的结果**。所以我们应该对纹理进行空间转换，然后只混合色度信息，从而得到还原的效果。在这里我们可以使用YCbCr色彩空间，并将其理解为 VHS 系统色彩表示的一种数字化版本。
+
+#### 实现代码
+
+```glsl
+sceneColor = RGBToYCbCr(sceneColor);
+
+half3 blurredColor = SAMPLE_TEXTURE2D(_BlurredTexture, sampler_BlurredTexture, input.uv).rgb;
+blurredColor = RGBToYCbCr(blurredColor);
+
+sceneColor.rgb = lerp(sceneColor.rgb, blurredColor.rgb, _BleedIntensity);
+sceneColor = YCbCrToRGB(sceneColor);
+```
+{: file="ColorBleed.shader"}
+
+色彩转换的函数为
+
+```glsl
+half3 RGBToYCbCr(half3 rgb)
+{
+    return half3(0.0625 + 0.257 * rgb.r + 0.50412 * rgb.g + 0.0979 * rgb.b,
+        0.5 - 0.14822 * rgb.r - 0.290 * rgb.g + 0.43921 * rgb.b,
+        0.5 + 0.43921 * rgb.r - 0.3678 * rgb.g - 0.07142 * rgb.b);
+}
+
+half3 YCbCrToRGB(half3 ycbcr)
+{
+    ycbcr -= half3(0.0625, 0.5, 0.5);
+    return half3(1.164 * ycbcr.x + 1.596 * ycbcr.z,
+        1.164 * ycbcr.x - 0.392 * ycbcr.y - 0.813 * ycbcr.z,
+        1.164 * ycbcr.x + 2.017 * ycbcr.y);
+}
+```
+{: file="ColorBleed.shader"}
+
+
+---
+
+### Smear
+
+在VHS系统中，由于模拟信号的延迟，会出现颜色向右“涂抹”的现象
+
+![](20241230105258.png)
+
+#### 实现思路
+
+在Shader中，我们通过多次采样邻近像素的颜色值，每次采样时使用更大的偏移量，并按指数衰减权重叠加到当前像素上，模拟视觉上的“拖尾”效果。同时为了避免生成的拖影导致图像整体过亮，还需要将累加的颜色值除以累加的总能量。
+
+#### 实现代码
+
+```glsl
+half4 SmearFragment(Varyings input) : SV_Target
+{
+    half4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
+    float energy = 1;
+    const uint SMEAR_LENGTH = 4;
+    [unroll]
+    for (uint i = 1; i <= SMEAR_LENGTH; i++)
+    {
+        float falloff = exp(-_Falloff * i);
+        energy += falloff;
+        float u = input.uv.x - _SmearTextureTexelSize * _Offset * i;
+        color += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, float2(u, input.uv.y)) * falloff;
+    }
+    return color / energy;
+}
+```
+{: file="Smear.shader"}
+
+---
+
+### Edge Sharpening
+
+VHS系统中，画面中的边缘区域容易亮边与暗边的失真。
+
+![](20241230120521.png)
+
+#### 实现思路
+
+使用偏移的UV对场景色进行一次采样，这样我们可以得到采样结果相对于原场景色的差值，我们就以此差值作为画面中的亮边与暗边，叠加到原场景色上即可。
+
+#### 实现代码
+
+```glsl
+float2 offsetUV = input.uv - float2(_EdgeDistance, 0);
+half3 offsetColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, offsetUV).rgb;
+
+half3 edge = sharpColor - offsetColor;
+color += edge * _EdgeIntensity;
+```
+{: file="EdgeSharpening.shader"}
 
 
 ---
@@ -207,4 +327,8 @@ half Scanlines(half2 uv)
 {: file="Scanline.shader"}
 
 ---
+
+### 代码
+
+项目地址在[这里](https://github.com/nscTechArt/URP-VHS-Retro-Effects)
 
