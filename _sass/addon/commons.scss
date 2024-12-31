@@ -53,7 +53,7 @@ body {
         $factor: 0.23rem;
       }
 
-      font-size: 1rem + (5 - $i) * $factor;
+      font-size: 1rem + (5 - $i) * $factor * 1.5;
     } @else {
       font-size: 1rem;
     }
