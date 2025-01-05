@@ -499,3 +499,90 @@ $$
 
 ---
 
+### 10 Anisotropic Model
+
+前面描述的标准材质模型只能描述各向同性的表面，即各个方向上的属性都相同的表面。然而，许多现实世界中的材料，如拉丝金属，只能使用各向异性模型来复现。
+
+![](material_anisotropic.png)
+
+#### 10.1 Anisotropic Specular BRDF
+
+我们可以修改此前的各项同性的镜面反射BRDF来匹配各向异性材质，Burley使用了一个各向异性的GGX法线分布函数：
+
+
+$$
+D_{aniso}(h, \alpha)=\frac{1}{\pi\alpha_t \alpha_b}\cdot\frac{1}{((\frac{t\cdot h}{\alpha_t})^2+(\frac{b\cdot h}{\alpha_b})^2+(n\cdot h)^2)}
+$$
+
+
+其中:
+
+
+$$
+\begin{align*}
+  \alpha_t &= \alpha \times (1 + anisotropy) \\
+  \alpha_b &= \alpha \times (1 - anisotropy)
+\end{align*}
+$$
+
+
+对应的代码实现为：
+
+```glsl
+float at = max(roughness * (1.0 + anisotropy), 0.001);
+float ab = max(roughness * (1.0 - anisotropy), 0.001);
+
+float D_GGX_Anisotropic(float NoH, const vec3 h, const vec3 t, const vec3 b, float at, float ab) {
+    float ToH = dot(t, h);
+    float BoH = dot(b, h);
+    float a2 = at * ab;
+    highp vec3 v = vec3(ab * ToH, at * BoH, a2 * NoH);
+    highp float v2 = dot(v, v);
+    float w2 = a2 / v2;
+    return a2 * w2 * w2 * (1.0 / PI);
+}
+```
+
+此外，Heitz也提出了各向异性的masking-shadowing函数，且能够匹配高度矫正的GGX分布：
+
+![](微信截图_20250105132332.png)
+
+对应的实现为：
+
+```glsl
+float at = max(roughness * (1.0 + anisotropy), 0.001);
+float ab = max(roughness * (1.0 - anisotropy), 0.001);
+
+float V_SmithGGXCorrelated_Anisotropic(float at, float ab, float ToV, float BoV,
+        float ToL, float BoL, float NoV, float NoL) {
+    float lambdaV = NoL * length(vec3(at * ToV, ab * BoV, NoV));
+    float lambdaL = NoV * length(vec3(at * ToL, ab * BoL, NoL));
+    float v = 0.5 / (lambdaV + lambdaL);
+    return saturateMediump(v);
+}
+```
+
+#### 10.2 Anisotropic Parameterization
+
+**Anisotropy**参数的范围在$[-1, 1]$之间，表示材质各向异性的量
+
+---
+
+### 11 Subsurface Model
+
+[TODO]
+
+---
+
+### 12 Cloth Model
+
+前面所描述的所有材质模型都是为了模拟**致密的表面**而设计的，无论是在宏观层面还是微观层面。然而，衣服和织物通常是由松散连接的**threads线**组成的，这些线会吸收和散射入射光。
+
+由于早期提出的微表面双向反射分布函数（BRDF）基于表面由随机凹槽组成且表现为完美镜子的假设，所以在重现布料的性质方面表现不佳。与硬表面相比，布料的特点是具有更柔和的镜面高光区域和较大的衰减，以及由正向 / 反向散射引起的模糊光照。一些织物还呈现出双色镜面颜色（例如天鹅绒）。
+
+天鹅绒是布料材质模型的一个有趣用例。如下图所示，这种类型的织物由于正向和反向散射而呈现出强烈的边缘光。这些散射现象是由垂直于织物表面的纤维引起的。当入射光来自与观察方向相反的方向时，纤维会向前散射光线。类似地，当入射光来自与观察方向相同的方向时，纤维会向后散射光线。
+
+![](screenshot_cloth_velvet.png)
+
+#### 12.1 Cloth Specualr BRDF
+
