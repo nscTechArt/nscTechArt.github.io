@@ -19,7 +19,7 @@ BRDF可以分为两个部分：
 
 ![](diagram_fr_fd.png)
 
-BRDF模型通过公式表示为：
+BRDF的数学表达式如下：
 
 
 $$
@@ -30,9 +30,7 @@ $$
 
 需要注意的是，这个公式表示的是来自单一方向的入射光的表面交互，完整的渲染方程需要我们在整个半球方向上进行积分。
 
-
-
-现实世界中的表面并不是平整的，我们需要一个能够描述光与不规则表面相互作用的模型。在BRDF中，我们引入微表面的概念，也就是说，物体的表面在微观上由大量随机排列的微小面microfacet组成。下图展示了微表面模型的概念：
+现实世界中的表面并不是平整的，我们需要一个能够描述光与不规则表面相互作用的模型。在BRDF中，我们引入微表面的概念，也就是说，**物体的表面在微观上由大量随机排列的微小面microfacet组成**。下图展示了微表面模型的概念：
 
 ![](diagram_microfacet.png)
 
@@ -40,13 +38,13 @@ $$
 
 ![](diagram_macrosurface.png)
 
-但是这并非是微表面可见的充分条件，在BRDF中，我们同样需要考虑到遮蔽masking与阴影shadowing，如下图所示：
+但是这并非是微表面可见的充分条件，在BRDF中，我们同样需要考虑到**遮蔽masking**与**阴影shadowing**，如下图所示：
 
 ![](diagram_shadowing_masking.png)
 
 
 
-在微表面BRDF模型中，粗糙度描述了在微观层面上的粗糙或光滑程度，表面越光滑，则满足微表面可见条件的微表面就会越多，从而让表面更光滑，表面越粗糙，就会导致镜面反射的高亮模糊，这个过程如下图所示：
+在微表面BRDF模型中，**粗糙度描述了在微观层面上的粗糙或光滑程度**，表面越光滑，则满足微表面可见条件的微表面就会越多，从而让表面更光滑，表面越粗糙，就会导致镜面反射的高亮模糊，这个过程如下图所示：
 
 ![](diagram_roughness.png)
 
@@ -63,11 +61,11 @@ $$
 其中：
 
 - $x$代表镜面或漫反射部分
-- $D$表示微表面分布模型
-- $G$模拟了微表面的可见度，即occlusion或shadow-masking
-- $f_m$对于漫反射部分和镜面反射部分的实现不同
+- $D$表示微表面的分布，又可以称为法线分布函数
+- $G$模拟了微表面的可见性，即occlusion或shadow-masking
+- $f_m$作为BRDF，对于漫反射部分和镜面反射有不同的实现
 
-需要注意的是，此方程用于在微观层面上对半球进行积分，如下图所示：
+需要注意的是，**此方程用于在微观层面上对半球进行积分**，如下图所示：
 
 ![](diagram_micro_vs_macro.png)
 
@@ -105,21 +103,18 @@ $$
 
 ### 4 Specular BRDF
 
-对于镜面反射的部分，我们所使用基于Cook-Torrance的微表面模型，公式如下：
+对于镜面反射的部分，我们所使用基于Cook-Torrance的微表面模型，其数学表达式如下：
 
 
 $$
 f_r(v, l)=\frac{D(h,\alpha)G(v, l, \alpha)F(v, h, f0)}{4(n\cdot v)(n \cdot l)}
 $$
 
-
-> Cook-Torrance是一个基于微观几何的反射模型，它考虑了表面的粗糙度、遮挡、阴影以及 Fresnel 效应。
-
-由于我们需要在实时渲染中实现这个模型，所以我们会使用$D$，$G$，$F$的近似公式进行计算
+**Cook-Torrance是一个基于微观几何的反射模型，它考虑了表面的粗糙度、遮挡、阴影以及 Fresnel 效应。**
 
 #### 4.1 D: Normal distribution function
 
-GGX/Trowbridge-Reitz模型使用了一种更接近现实的微表面法线分布函数，能够模拟具有粗糙表面的物体。其分布函数具有较长的尾部（"heavy tail"），这使得它能够更好地表现表面粗糙度较低但仍有高光区域的物体。公式如下：
+GGX模型使用了一种更接近现实的微表面法线分布函数，能够模拟具有粗糙表面的物体。其分布函数具有较长的尾部（"heavy tail"），这使得它能够更好地表现表面粗糙度较低但仍有高光区域的物体。公式如下：
 
 
 $$
@@ -130,7 +125,7 @@ $$
 
 其中，$h$表示入射方向与观察方向的半程向量，而$\alpha$则表示表面的粗糙度的平方。
 
-#### G: Geometric shadowing
+#### 4.2 G: Geometric shadowing
 
 首先，我们给出模拟几何阴影的Smith公式：
 
@@ -201,13 +196,15 @@ $$
 - **粗糙度 $\alpha$**：粗糙度代表了微表面倾斜的程度，也可以视为表面高度变化的一个统计表达。粗糙度越大，意味着微表面的高度差异越大，这会影响光线和视线方向的遮挡和阴影效果
 - **视线与法线、光线与法线的点积值**：这些点积值实际上是在反映微表面倾斜角度与光线或视线的关系。不同的角度意味着微表面与光线或视线方向的高度差异，也就影响了几何遮蔽。
 
-#### F: Fresnel
+#### 4.3 F: Fresnel
 
-菲涅尔效应模拟这样一个事实：观察者看到的从表面反射的光量取决于观察角度。我们以下图为例，当观察者直视水面时，我们可以看穿水面，而当从远处看向水面时，就会发现水面上的反射更为明显：
+菲涅尔效应模拟了这样一个事实：**观察者看到的从表面反射的光量取决于观察角度**。我们以下图为例，当观察者直视水面时，我们可以看穿水面，而当从远处看向水面时，就会发现水面上的反射更为明显：
 
 ![](photo_fresnel_lake.jpg)
 
-我们可以规范一下对菲涅尔效应的描述：菲涅尔项定义了在两个不同的介质的相接面上，光的反射与折射情况，或者说反射能量与透射能量之比。
+实际上，反射的光量不仅取决于观察角度，同样会收到材质IOR的影响。我们将垂直入射时反射的光量记为$f_{0}$，又叫做**菲涅尔反射率**，将掠射时反射的光量记为$f_{90}$。
+
+我们可以规范一下对菲涅尔效应的描述：**菲涅尔项定义了在两个不同的介质的相接面上，光的反射与折射情况，或者说反射能量与透射能量之比。**
 
 在Cook-Torrance BRDF模型中，我们所使用的菲涅尔公式如下：
 
@@ -216,17 +213,20 @@ $$
 F_{Schlick}(v, h, f_0, f_{90})=f_0+(f_{90}-f_0)(1-v\cdot h)^5
 $$
 
+**常数$f_0$表示垂直入射时的镜面反射率，对于电介质是无色的，对于金属是有色的**。具体的值取决于材质的IOR系数。
 
-其中，$f_0$表示光线垂直入射时的反射率，同时，反射率对于金属和非金属有不同的解释：
+实际上，我们可以讲这个菲涅尔函数看作在入射镜面反射率与掠射角处的反射率，即$f_{90}$，之间进行插值。观察现实世界，无论材质是否是金属还是非金属的，在掠射角均表现为无色的镜面反射，故我们可以将$f_{90}$设为1，从而得到简化的菲涅尔函数的实现：
 
-- 对于金属，反射率是物体本身固有的反射率
-- 对于非金属，反射率通常较小
-
-通常来说，我们会取$f_90$为$1$
+```glsl
+vec3 F_Schlick(float u, vec3 f0) {
+    float f = pow(1.0 - u, 5.0);
+    return f + f0 * (1.0 - f);
+}
+```
 
 ---
 
-### Diffuse BRDF
+### 5 Diffuse BRDF
 
 对于BRDF中的漫反射来说，我们会假设在整个微表面半球上，有均匀的漫反射，即：
 
@@ -236,13 +236,14 @@ f_d(v, l)=\frac{\sigma}{\pi}
 $$
 
 
-而在实践中，我们通常会将漫反射率$\sigma$的计算延后。
 
-但是，漫反射在理想上来说，应该与镜面反射部分匹配，也就是将表面的粗糙度考虑在内，迪士尼漫反射模型的公式如下：
+然而，在理想情况下，漫反射部分应该与镜面反射项保持一致，并且考虑到表面的粗糙度。Disney与Oren-Nayar两个漫反射模型都将粗糙度考虑在内，并且能在掠射角产生一些逆向反射。
+
+Disney漫反射模型的数学表达式如下：
 
 
 $$
-f_d(v,l)=\frac{\sigma}{\pi}F_{Schlick}(n, l, 1, f_{90})F_{Schlick}(n, v, 1, f_{90})
+f_d(v, l)=\frac{\sigma}{\pi}F_{Schlick}(n, l, 1, f_{90})F_{Schlick}(n, v, 1, f_{90})
 $$
 
 
@@ -250,19 +251,251 @@ $$
 
 
 $$
-f_{90}=0.5+2*acos^2(\theta_d)
+f_{90}=0.5 + 2\cdot \alpha cos^2(\theta_d)
 $$
 
 
-下图演示了在完全粗糙的非金属材质下，分别使用兰伯特漫反射BRDF与迪士尼漫反射BRDF的区别，可以看出，后者在掠过角处的表现要更好一些。
+需要注意的是，我们在这里所介绍的迪士尼模型并不遵守能量守恒定律
 
 ---
 
-### Standard model summary
+### 6 Standard model summary
 
-**镜面反射部分**：使用Cook-Torrance镜面微表面模型，包含基于GGX的法线分布函数，基于Smith-GGX的高度相关可视函数，以及基于Schlick的菲涅尔函数
+**镜面反射部分**：使用Cook-Torrance镜面微表面模型，包含基于GGX的法线分布函数，基于Smith-GGX的高度矫正的可见性函数，以及基于Schlick的菲涅尔函数
 
-**漫反射部分**：可以使用兰伯特漫反射，也可以使用迪士尼漫反射额
+**漫反射部分**：可以使用兰伯特漫反射，也可以使用迪士尼漫反射
+
+完整的代码实现如下：
+
+```glsl
+float D_GGX(float NoH, float a) {
+    float a2 = a * a;
+    float f = (NoH * a2 - NoH) * NoH + 1.0;
+    return a2 / (PI * f * f);
+}
+
+vec3 F_Schlick(float u, vec3 f0) {
+    return f0 + (vec3(1.0) - f0) * pow(1.0 - u, 5.0);
+}
+
+float V_SmithGGXCorrelated(float NoV, float NoL, float a) {
+    float a2 = a * a;
+    float GGXL = NoV * sqrt((-NoL * a2 + NoL) * NoL + a2);
+    float GGXV = NoL * sqrt((-NoV * a2 + NoV) * NoV + a2);
+    return 0.5 / (GGXV + GGXL);
+}
+
+float Fd_Lambert() {
+    return 1.0 / PI;
+}
+
+void BRDF(...) {
+    vec3 h = normalize(v + l);
+
+    float NoV = abs(dot(n, v)) + 1e-5;
+    float NoL = clamp(dot(n, l), 0.0, 1.0);
+    float NoH = clamp(dot(n, h), 0.0, 1.0);
+    float LoH = clamp(dot(l, h), 0.0, 1.0);
+
+    // perceptually linear roughness to roughness (see parameterization)
+    float roughness = perceptualRoughness * perceptualRoughness;
+
+    float D = D_GGX(NoH, roughness);
+    vec3  F = F_Schlick(LoH, f0);
+    float V = V_SmithGGXCorrelated(NoV, NoL, roughness);
+
+    // specular BRDF
+    vec3 Fr = (D * V) * F;
+
+    // diffuse BRDF
+    vec3 Fd = diffuseColor * Fd_Lambert();
+
+    // apply lighting...
+}
+```
+
+---
+
+### 7 Improving the BRDFs
+
+正如我们前面所提到的，一个好的BRDF模型应该满足能量守恒定律。然而，我们目前所构建BRDF仍然存在两点问题：
+
+#### 7.1 Energy Gain in Diffuse Reflectance
+
+Lambert漫反射模型没有考虑到表面反射的光，换句话说，兰伯特模型假设光线在进入表面并且在表面内部反射散射后重新从表面反射出来，但是它忽略了表面上可能发生的反射。
+
+实际的表面通常不会完全是漫反射的，很多材质在某些角度下会有明显的反射效果（比如玻璃或金属表面），这些反射的光并不会参与到漫反射事件中，而是直接被反射回去。所以说，Lambert模型并没有考虑这种反射现象，因此它的适用范围是非常简化的，通常用在模拟那些表现出理想漫反射性质的材质上。
+
+#### 7.2 Energy Loss in Specular Reflectance
+
+我们目前所展示的Cook-Torrance BRDF试图在微观层面上对多个事件进行建模，但它是通过考虑光线的单次反弹实现的。对于较高的粗糙度来说，Cook-Torrance BRDF会带来一些能量损失。如下图所示，如果只考虑光线的单次反射，那么图中的光线会由于shadowing与masking项而被丢弃，但如果考虑到光线的多次反射，也存在光线在多次反射后进入观察者视线中的可能：
+
+![](diagram_single_vs_multi_scatter.png)
+
+基于这个简单的解释，我们可以得到这样的结论：**表面越粗糙，则由于没考虑到多次散射而导致的能量损失的可能性就越大。**这种能量损失最终将导致材质变暗，对于金属材质来说，这种现象尤为明显，因为金属材质所有的反射都是高光反射。
+
+Kulla and Conty提出了一种能量补偿方案，
+
+> 这里待补充
+
+---
+
+### 8 Parameterization
+
+标准材质模型使用到了如下的参数：
+
+- **BaseColor**
+  - diffuse albedo for non-metallic surfaces
+  - specular color for metallic surfaces
+- **Metallic**
+- **Roughness**
+- **Reflectance**
+  - 非金属表面在垂直入射时的菲涅尔反射率
+  - 这个参数取代了IOR
+- **Emissive**
+- **Ambient occlusion**
+
+#### 8.1 Remapping
+
+为了让我们的标准材质模型更易于使用，我们必须要对其中的三个参数进行重映射
+
+##### 8.1.1 BaseColor
+
+材质的基础色会收到材质金属度的影响。**非金属材质具有无色的镜面reflectance，但将其基础色保留为漫反射颜色。**另一方面，**金属材质将其基础色用作镜面颜色，并且没有漫反射分量。**
+
+所以对于基础色，我们进行这样的重映射：
+
+```glsl
+vec3 diffuseColor = (1.0 - metallic) * baseColor.rgb;
+```
+
+##### 8.1.2 Reflectance
+
+在我们的BRDF模型中，菲涅尔项取决于$f_0$，也就是垂直入射时的镜面反射率，并且我们知道，对于非金属材质来说，$f_0$是无色的。对于非金属表面，我们使用下面这个映射函数：
+
+
+$$
+f_0=0.16 \cdot reflectance^2
+$$
+
+
+我们的目标是将$f_0$映射到一个特定的范围，该范围可以表示常见非金属材质（reflectance = 4%）与宝石（reflectance = 8%-16%）的菲涅尔值。比方说，reflectance为0.5时，所对应的菲涅尔反射率为4%。如下图所示：
+![](diagram_reflectance.png)
+
+如果材质的IOR已知（例如空气-水的IOR为1.33），那么我们可以利用如下公式计算出菲涅尔反射率：
+
+
+$$
+f_0(n_{ior})=\frac{(n_{ior}-1)^2}{(n_{ior}+1)^2}
+$$
+金属材质的$f_0$是有色的，即：
+
+
+$$
+f_0=baseColor \cdot metallic
+$$
+
+
+在我们的标准模型中，我们使用以下方式来计算来计算$f_0$
+
+```glsl
+vec3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + baseColor * metallic;
+```
+
+##### 8.1.3 Roughness
+
+开发者所设置的粗糙度，被称为感知粗糙度，我们使用以下公式重新映射到感知线性范围：
+
+
+$$
+\alpha = perceptualRoughness^2
+$$
+
+
+如下图展示了一个银色的金属材质随着粗糙度提高的外观变化，分别使用了映射值（上面）与非映射值（下面）：
+
+![](material_roughness_remap.png)
+
+很显然，重映射后的粗糙度在美术上是更容易被接受的，如果没有重映射，有光泽的金属表面将不得不被限制在0.0 到 0.05 之间的非常小的范围内。
+
+---
+
+### 9 Clear Coat Model
+
+目前我们所构建的标准模型非常适合于**单层**的非各向异性表面。然而在现实世界中，多层材质是非常常见的，特别是在标准层之上有一层薄的半透明层的材质，例如车漆、上漆的木材、亚克力等。
+
+![](material_clear_coat.png)
+
+通过添加第二个镜面反射lobe的扩展标准材质模型，我们可以模拟clear coat的材质效果。简单起见，**我们将clear coat层定义为非各向异性且非金属的。**
+
+由于入射光会穿过clear coat层，我们还需要考虑到能量损失。此外，我们的模型不会考虑光线在层之间的相互反射与折射行为。
+
+![](diagram_clear_coat.png)
+
+#### 9.1 Clear Coat Specular BRDF
+
+清漆层将使用标准模型中使用的相同的 Cook-Torrance 微面 BRDF 进行建模。由于清漆层始终是各向同性且绝缘的，粗糙度值较低，因此我们可以选择更便宜的 DFG 项而不会明显牺牲视觉质量。
+
+对于D与F，我们仍然适用标准模型中的方案，而对于可见性G，我们使用Kelemen模型：
+
+
+$$
+V(l, h)=\frac{1}{4(l\cdot h)^2}
+$$
+
+
+这个模型并非物理正确，但是在实时渲染中非常合适。
+
+需要注意的是，BRDF中的菲涅尔项需要我们提供$f_0$这个参数，为此，我们假设clear coat层是由聚氨酯这种材料构成的，它与空气的IOR值为1.5，从而我们可以计算出$f_0$为0.04，这也是常见电介质材质的菲涅尔反射率。
+
+#### 9.2 Integration in the Surface Response
+
+我们需要将因clear coat层而导致的能量损失考虑在内，新的BRDF表达式为：
+
+
+$$
+f(v, l)=f_d(v, l)(1-F_c)+f_r(v, l)(1-F_c)+fc(v, l)
+$$
+
+
+其中，$f_c$表示clear coat层的BRDF，$F_c$表示$f_c$的菲涅尔项
+
+#### 9.3 Clear coat Parameterization
+
+清漆材质在标准材质的基础上，多了两个额外的参数：
+
+- **ClearCoat**：清漆层的强弱
+- **ClearCoatRoughness**：感知粗糙度
+
+最终，加入清漆层的BRDF实现代码为：
+
+```glsl
+void BRDF(...) {
+    // compute Fd and Fr from standard model
+
+    // remapping and linearization of clear coat roughness
+    clearCoatPerceptualRoughness = clamp(clearCoatPerceptualRoughness, 0.089, 1.0);
+    clearCoatRoughness = clearCoatPerceptualRoughness * clearCoatPerceptualRoughness;
+
+    // clear coat BRDF
+    float  Dc = D_GGX(clearCoatRoughness, NoH);
+    float  Vc = V_Kelemen(clearCoatRoughness, LoH);
+    float  Fc = F_Schlick(0.04, LoH) * clearCoat; // clear coat strength
+    float Frc = (Dc * Vc) * Fc;
+
+    // account for energy loss in the base layer
+    return color * ((Fd + Fr * (1.0 - Fc)) * (1.0 - Fc) + Frc);
+}
+```
+
+#### 9.4 Base Layer Modification
+
+由于清漆层的存在，标准材质不再与空气相接触，而是与清漆材质相接触，所以我们需要重新计算标准材质的$f_0$。由于清漆材质的$f_0$是已知的，所以这一步不难实现。
+
+
+$$
+f_{0_{base}} = \frac{\left( 1 - 5 \sqrt{f_0} \right) ^2}{\left( 5 - \sqrt{f_0} \right) ^2}
+$$
 
 ---
 
