@@ -52,3 +52,7 @@ $$
 
 
 我们希望$\frac{dp}{ds}$作为shadow map aliasing error能够保持不变，从而使得不同深度的物体的每个像素在shadow map上的覆盖区域保持不变，也就是锯齿在场景不同深度下保持恒定。
+
+---
+
+[Cascaded Shadow Maps - Win32 apps | Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/dxtecharts/cascaded-shadow-maps)
