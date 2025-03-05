@@ -6,9 +6,9 @@ media_subpath: /assets/img/Graphics/Scratchapixel/
 math: true
 ---
 
-### An Introduction to Volume Rendering
+### 1 An Introduction to Volume Rendering
 
-#### Transmittance, Absorption, Particle Density, and Beer's Law
+#### 1.1 Transmittance, Absorption, Particle Density, and Beer's Law
 
 体积渲染围绕这样几个概念展开：**透射、吸收，以及volume不透明度与volume中粒子密度之间的关系**。为了简单起见，我们暂时先考虑均一的密度。
 
