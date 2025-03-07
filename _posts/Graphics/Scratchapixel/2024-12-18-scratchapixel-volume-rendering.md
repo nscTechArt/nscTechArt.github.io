@@ -190,7 +190,11 @@ $$
 
 #### 2.1 Backward Ray-Marching
 
-我们遵循从后向前的步进顺序，也就是将volume中位于$t_1$处的样本$X0$作为第一个样本，然后依次步进回到$t_0$。那么我们要如何计算这个每个样本的贡献值呢？我们首先来考虑第一个样本$X0$。
+我们遵循从后向前的步进顺序，也就是将volume中位于$t_1$处的样本$X0$作为第一个样本，然后依次步进回到$t_0$。
+
+由于我们要从volume对象的后方开始步进，我们可以将最终的颜色结果初始化为背景色，当我们完成对于volume颜色已经透明度的计算后，就可以叠加结果并输出了。
+
+那么我们要如何计算这个每个样本的贡献值呢？我们首先来考虑第一个样本$X0$。
 
 - 我们需要计算in-scattering贡献值$Li(X0)$。计算方法我们已经在上一个section中的第四步讨论过了。
 - 乘以该样本的透明度，也就是该样本处volume会吸收多少光量。计算方式同样是利用Beer定律，其中距离是光线在该样本中的穿行距离，即step size
@@ -217,44 +221,73 @@ Color final = backgroundColor * transparency + result;
 在Unity中的实现如下：
 
 ```glsl
-float transparency = 1;
-half3 result = 0;
-
-for (int i = 0; i < steps; i++)
+half4 VolumeRenderingPassFragment(Varyings input) : SV_Target
 {
-    // calculate the sample position
-    // -----------------------------
-    float t = t1 - stepSize * (i + 0.5); // middle of the step
-    float3 samplePos = rayOrigin + rayDirection * t;
+    // initialize colors
+    // -----------------
+    const half3 backgroundColor = _BackgroundColor.rgb;
+    const half3 volumeColor = _VolumeColor.rgb;
+	const float3 lightDirection = float3(0, 1, 0);
+	const half3 lightColor = half3(1.3, 0.3, 0.9);
 
-    // compute current sample's transparency
-    // -------------------------------------
-    float sampleTransparency = exp(-stepSize * _Absorption);
+    // ray-sphere intersection
+	// -----------------------
+    float3 positionWS = ReconstructionPositionWS(input.texcoord);
+    float3 rayDirection = normalize(positionWS - _WorldSpaceCameraPos);
+    float3 rayOrigin = _WorldSpaceCameraPos;
+	float t0, t1;
+	bool intersected = HitSphere(rayOrigin, rayDirection, t0, t1);
 
-    // attenuate global transparency by current sample's transparency
-    // --------------------------------------------------------------
-    transparency *= sampleTransparency;
+    // if no intersection, return background color
+	// -------------------------------------------
+	if (!intersected) return float4(backgroundColor, 1);
 
-    // in-scattering
-    // -------------
-    float lightDistance = distance(samplePos, lightPos);
-    float lightAttenuation = exp(-lightDistance * _Absorption);
-    result += lightAttenuation * lightColor * stepSize;
+	// configure ray marching
+	// ----------------------
+	float stepSize = 0.1;
+	int numSteps = ceil(t1 - t0) / stepSize;
+	stepSize = (t1 - t0) / numSteps;
 
-    // finally attenuate result by sample's transparency
-    // -------------------------------------------------
-    result *= sampleTransparency;
+	// initialize final result
+	// -----------------------
+	float transparency = 1;
+	half3 result = 0;
+
+	// start ray marching
+	// ------------------
+	float sampleTransparency = exp(-stepSize * _Absorption);
+	for (int i = 0; i < numSteps; i++)
+	{
+		// calculate sample position
+		// -------------------------
+		float t = t1 - (i + 0.5) * stepSize;
+		float3 pos = rayOrigin + t * rayDirection;
+
+		// accumulate global transparency
+		// ------------------------------
+		transparency *= sampleTransparency;
+
+		// calculate light in-scattering contribution to sample
+		// ----------------------------------------------------
+		float lightT0, lightT1;
+		if (HitSphere(pos, lightDirection, lightT0, lightT1))
+		{
+			float3 lightAttenuation = exp(-lightT1 * _Absorption);
+			result += lightColor * lightAttenuation * stepSize;
+		}
+
+		result *= sampleTransparency;
+	}
+	
+    return half4(backgroundColor * transparency + result, 1);
 }
-
-color.rgb = backgroundColor * transparency + result;
-return color;
 ```
 
 ![](20241218230552.png)
 
 ---
 
-#### Forward Ray-Marching
+#### 2.2 Forward Ray-Marching
 
 不管是前向还是后向，采样点透射率与in-scattering的计算手段都是相同的，二者的区别在于组合采样点的方式。在前向步进中，样本的in-scattering贡献值已经被当前处理完成的采样点的总透明度衰减完成了。对于前向步进，算法描述如下：
 
@@ -278,44 +311,46 @@ return color;
 在Unity中的实现为：
 
 ```glsl
-for (int i = 0; i < steps; i++)
-{
-    // calculate the sample position
-    // -----------------------------
-    float t = t0 + stepSize * (i + 0.5);
-    float3 samplePos = rayOrigin + rayDirection * t;
+	// start ray marching
+	// ------------------
+	float sampleTransparency = exp(-stepSize * _Absorption);
+	for (int i = 0; i < numSteps; i++)
+	{
+		// calculate sample position
+		// -------------------------
+		float t = t0 + (i + 0.5) * stepSize;
+		float3 pos = rayOrigin + t * rayDirection;
 
-    // compute current sample's transparency
-    // -------------------------------------
-    float sampleTransparency = exp(-stepSize * _Absorption);
+		// accumulate global transparency
+		// ------------------------------
+		transparency *= sampleTransparency;
 
-    // attenuate global transparency by current sample's transparency
-    // --------------------------------------------------------------
-    transparency *= sampleTransparency;
-
-    // in-scattering
-    // -------------
-    float lightDistance = distance(samplePos, lightPos);
-    float lightAttenuation = exp(-lightDistance * _Absorption);
-    result += transparency * lightAttenuation * lightColor * stepSize;
-}
+		// calculate light in-scattering contribution to sample
+		// ----------------------------------------------------
+		float lightT0, lightT1;
+		if (HitSphere(pos, lightDirection, lightT0, lightT1))
+		{
+			float3 lightAttenuation = exp(-lightT1 * _Absorption);
+			result += transparency * lightColor * lightAttenuation * stepSize;
+		}
+	}
 ```
 
 两种方式得到的最终结果都是一样的。
 
 ---
 
-#### Why forward is "better" than backward
+#### 2.3 Why forward is "better" than backward
 
 在前向步进中，当整体透明度非常接近零时，我们就可以停止步进，从而减少不必要的计算。
 
 ---
 
-#### Choosing the Step Size
+#### 2.4 Choosing the Step Size
 
 我们使用光线步进来进行volume rendering，是因为能够较好对求出积分的近似。所以stepsize的选择是一种在性能与精确程度上的权衡。
 
-除此以外，StepSize的选择还有一些其他的考量。目前我们假设volume的密度是均匀的，而在后续的内容中，密度能够随着空间或时间而变换。如果步长较大，就有可能无法捕捉到一些较小的频率特征，如下图所示（当然这是一个极端的示例）：
+目前我们假设volume的密度是均匀的，而在后续的内容中，密度能够随着空间或时间而变换。如果步长较大，就有可能无法捕捉到一些较小的频率特征，如下图所示（当然这是一个极端的示例）：
 
 ![](voldev-stepsizesmall.png)
 
@@ -333,7 +368,7 @@ float projPixWidth = 2 * tanf(M_PI / 180 * fov / (2 * imageWidth)) * tmin;
 
 ---
 
-### Ray Marching: Getting it Right!
+### 3 Ray Marching: Getting it Right!
 
 在前面的章节中，我们只考虑了光束与构成介质的粒子之间的两种相互作用类型：**吸收**和**内散射**。但是，为了得到准确的结果，我们应该考虑四种类型。我们可以将它们分为两类。一类是光束穿过介质到达眼睛的过程中减弱其能量的相互作用。另一类是有助于增加其能量的相互作用。
 
@@ -346,91 +381,94 @@ float projPixWidth = 2 * tanf(M_PI / 180 * fov / (2 * imageWidth)) * tmin;
 
 ![](voldev-interactions.png)
 
-在我们目前的Unity实现中，光线损失的能量只考虑到了吸收这种情况。现在，我们可以将散射同样考虑在内，也就是在应用Beer定律时，将散射系数与吸收系数相加，用$\sigma_t$表示，称为extinction coefficient。
+在我们目前的Unity实现中，光线损失的能量只考虑到了吸收这种情况。现在，我们可以将散射同样考虑在内，也就是在应用Beer定律时，将散射系数与吸收系数相加，用$\sigma_t$表示，称为**extinction coefficient**。
 
 此外，考虑到内散射的贡献值与散射系数成正比，我们还需要将内散射乘以散射系数。
 
 最终我们的代码如下：
 
 ```glsl
-float extinction = _Absorption + _Scatter;
+// calculate each sample's transmittance
+// -------------------------------------
+float sampleTransmittance = exp(-stepSize * (_Absorption + _Scatter));
 
-float transparency = 1;
-half3 result = 0;
-
-// compute each sample's transparency
-// ----------------------------------
-const float sampleTransparency = exp(-stepSize * extinction);
-
-// using forward ray marching
-// --------------------------
-for (int i = 0; i < steps; i++)
+// start forward-raymarching
+// -------------------------
+for (int i = 0; i < numSteps; i++)
 {
-    // calculate the sample position
-    // -----------------------------
-    float t = t0 + stepSize * (i + 0.5);
-    float3 samplePos = rayOrigin + rayDirection * t;
+    // calculate sample position
+    // -------------------------
+    float t = t0 + (i + 0.5) * stepSize;
+    float3 samplePos = rayOrigin + t * rayDirection;
 
-    // attenuate global transparency by each sample's transparency
-    // -----------------------------------------------------------
-    transparency *= sampleTransparency;
-
-    // in-scattering of this sample
-    // ----------------------------
-    float lightAttenuation = exp(-distance(samplePos, lightPos) * extinction);
-    float3 inScattering = lightAttenuation * lightColor * stepSize * _Scatter;
-
-    // add in-scattering to the result
+    // accumulate global transmittance
     // -------------------------------
-    result += inScattering * transparency;
+    totalTransmittance *= sampleTransmittance;
+
+    // in-scattering
+    // -------------
+    float lightT0, lightT1;
+    if (HitSphere(samplePos, lightDirection, lightT0, lightT1))
+    {
+        // calculate light calculation
+        // ---------------------------
+        float3 lightAttenuation = exp(-lightT1 * (_Absorption + _Scatter));
+        float3 lightContribution = lightColor * lightAttenuation;
+
+        // accumulate light contribution
+        // -----------------------------
+        result += totalTransmittance * lightContribution * stepSize;
+    }
 }
-
-// final color
-// -----------
-color.rgb = backgroundColor * transparency + result;
-return color;
 ```
-{: add-lines="1, 8, 25-26"}
-
 ---
 
-#### The Density Term
+#### 3.1 The Density Term
 
-目前为止，volume的密度是均一的，我们将这种volume称为**homogenous participating medium**。在现实世界中，如云与烟通常具有非均一的密度，我们称之为**heterogeneous participating medium**。
+目前为止，我们使用散射与吸收系数用于控制volume的不透明程度，并且这两个系数在volume中是恒定的。我们将这种volume称为**homogenous participating medium**。在现实世界中，如云与烟通常具有非均一的密度，我们称之为**heterogeneous participating medium**。
 
-我们定义一个密度变量，用于全局地缩放吸收与散射系数。另外，内散射的贡献值也需要乘以密度。
+我们可以定义一个**密度变量**，用于全局地缩放吸收与散射系数。
 
 ```glsl
-const float sampleTransparency = exp(-stepSize * extinction * _Density);
+	// calculate each sample's transmittance
+	// -------------------------------------
+	float extinction = (_Absorption + _Scatter) * _Density;
+	float scatter = _Scatter * _Density;
+	float sampleTransmittance = exp(-stepSize * extinction);
+	
+	// start forward-raymarching
+	// -------------------------
+	for (int i = 0; i < numSteps; i++)
+	{
+		// calculate sample position
+		// -------------------------
+		float t = t0 + (i + 0.5) * stepSize;
+		float3 samplePos = rayOrigin + t * rayDirection;
 
-// using forward ray marching
-// --------------------------
-for (int i = 0; i < steps; i++)
-{
-    // calculate the sample position
-    // -----------------------------
-    float t = t0 + stepSize * (i + 0.5);
-    float3 samplePos = rayOrigin + rayDirection * t;
-    
-    // attenuate global transparency by each sample's transparency
-    // -----------------------------------------------------------
-    transparency *= sampleTransparency;
+		// accumulate global transmittance
+		// -------------------------------
+		totalTransmittance *= sampleTransmittance;
 
-    // in-scattering of this sample
-    // ----------------------------
-    float lightAttenuation = exp(-distance(samplePos, lightPos) * extinction * _Density);
-    float3 inScattering = lightAttenuation * lightColor * stepSize * _Scatter * _Density;
+		// in-scattering
+		// -------------
+		float lightT0, lightT1;
+		if (HitSphere(samplePos, lightDirection, lightT0, lightT1))
+		{
+			// calculate light calculation
+			// ---------------------------
+			float3 lightAttenuation = exp(-lightT1 * extinction);
+			float3 lightContribution = lightColor * lightAttenuation;
+			lightContribution *= scatter;
 
-    // add in-scattering to the result
-    // -------------------------------
-    result += inScattering * transparency;
-}
+			// accumulate light contribution
+			// -----------------------------
+			result += totalTransmittance * lightContribution * stepSize;
+		}
+	}
 ```
-{: add-lines="1, 18-19"}
-
 ---
 
-#### The Phase Function
+#### 3.2 The Phase Function
 
 我们先来回顾一下内散射的计算公式如下：
 
@@ -442,16 +480,9 @@ $$
 
 其中，$x$表示采样点的位置，$\omega$表示观察方向，也就是步进算法中的射线方向，$\omega'$表示光线方向，$L(x, \omega')$表示光源原本的贡献值。此外，与常规的物体渲染不同，我们需要在整个球形上进行积分。
 
-与此对应的，我们的代码实现为：
+但是，我们在代码中并没有实现公式中的$p(x, \omega, \omega')$项。这一项被称为**相位函数**。
 
-```glsl
-float lightAttenuation = exp(-distance(samplePos, lightPos) * extinction * _Density);
-float3 inScattering = lightAttenuation * lightColor * stepSize * _Scatter * _Density;
-```
-
-可见我们在代码中并没有实现公式中的$p(x, \omega, \omega')$项。这一项被称为**相位函数**。
-
-在**各向同性**的散射volume中，当光子与组成volume的粒子交互时，光子可以被散射到任意方向上。然而，大多数volume都倾向与在一个受限的方向范围内散射光线。我们将这种性质称为**各向异性**。相位函数用于描述散射光线的角度分布，在数学上返回了一个零到一之间的值。相位函数具有在其定义域上的积分必然为1的性质。
+在**各向同性**的散射volume中，当光子与组成volume的粒子交互时，光子可以被散射到任意方向上。然而，**大多数volume都倾向与在一个受限的方向范围内散射光线。**我们将这种性质称为**各向异性**。相位函数用于描述散射光线的角度分布，在数学上返回了一个零到一之间的值。**相位函数具有在其定义域上的积分必然为1的性质**。
 
 最简单的相位函数来自于均一volume：
 
@@ -479,7 +510,7 @@ $$
 
 ---
 
-#### Jittering the Sample Positions
+#### 3.3 Jittering the Sample Positions
 
 
 
