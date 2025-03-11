@@ -106,21 +106,18 @@ half3 YCbCrToRGB(half3 ycbcr)
 #### 实现代码
 
 ```glsl
-half4 SmearFragment(Varyings input) : SV_Target
+half4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
+float energy = 1;
+const uint SMEAR_LENGTH = 4;
+[unroll]
+for (uint i = 1; i <= SMEAR_LENGTH; i++)
 {
-    half4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
-    float energy = 1;
-    const uint SMEAR_LENGTH = 4;
-    [unroll]
-    for (uint i = 1; i <= SMEAR_LENGTH; i++)
-    {
-        float falloff = exp(-_Falloff * i);
-        energy += falloff;
-        float u = input.uv.x - _SmearTextureTexelSize * _Offset * i;
-        color += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, float2(u, input.uv.y)) * falloff;
-    }
-    return color / energy;
+    float falloff = exp(-_Falloff * i);
+    energy += falloff;
+    float u = input.uv.x - _SmearTextureTexelSize * _Offset * i;
+    color += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, float2(u, input.uv.y)) * falloff;
 }
+return color / energy;
 ```
 {: file="Smear.shader"}
 
