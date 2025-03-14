@@ -1,5 +1,5 @@
 ---
-title: Introduction to Lighting
+title: Introduction to Shading
 date: 2022-12-30 23:38 +0800
 categories: [Graphics, Scratchpixel]
 media_subpath: /assets/img/Graphics/Scratchapixel/
