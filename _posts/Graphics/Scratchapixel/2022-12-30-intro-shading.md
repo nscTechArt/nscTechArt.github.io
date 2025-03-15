@@ -6,6 +6,8 @@ media_subpath: /assets/img/Graphics/Scratchapixel/
 math: true
 ---
 
+> [Introduction to Shading](https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-shading/what-is-shading-light-matter-interaction.html)
+
 ### 1 What is Shading: Light-Matter Interaction
 
 在本篇博客中，我们会首次了解到“shading”的含义，以及影响物体外观的因素，例如**光线强度**、**光线方向**、**物体表面相对于光源的朝向**、**物体的颜色**等等。当我们理解了这些基础概念后，我们将会探讨一些用于计算着色的基本技巧，并在后续探讨更深层次的东西，例如反射与折射。
@@ -62,4 +64,42 @@ math: true
 ---
 
 ###  2 Normals, Vertex Normals and Facing Ratio
+
+#### 2.1 Normals
+
+法线在着色中是一个很重要的概念，因为物体表面的朝向能够影响表面所反射的光量。那么问题来了，如何计算法线呢？解决方法的复杂性在很大程度上取决于要渲染的几何体。以三角形为例，每个三角形都定义了一个平面，那么与这个平面向垂直的向量就可以作为三角形上任意一点的法线。我们可以通过对三角形任意两边做叉积计算出这个向量。
+
+通过这种方式计算出来的法线，我们称之为**face normal**。因为法线对于整个面来说都是一致的。我们当然也可以在网格体的顶点上定义法线，这样的法线就是vertex normal，这也是在smooth shading中所需要的法线数据。
+
+#### 2.2 Flat Shading vs. Smooth Shading
+
+三角形网格体并不能完美地表示平滑的表面，除非构成网格体的三角形很小很小。如果我们使用三角形的face normal进行着色渲染，那我们得到的渲染效果就被称为**flat shading**：
+
+![](shad-face-normals.png)
+
+为了解决这种faceted appearance，Henri Gouraud提出了一种方法，不再计算每个面的法线，而是使用每个顶点上的法线，并通过线性插值来计算三角表面上任意着色点的法线。
+
+![](shad-face-normals2.png)
+
+下面的这段代码可以在已知顶点法线、着色点的重心坐标以及三角形索引的前提下计算出插值的法线：
+
+```c++
+void getSurfaceProperties( 
+    const Vec3f &hitPoint, 
+    const Vec3f &viewDirection, 
+    const uint32_t &triIndex, 
+    const Vec2f &uv, 
+    Vec3f &hitNormal, 
+    Vec2f &hitTextureCoordinates) const 
+{
+    // compute "smooth" normal using Gouraud's technique (interpolate vertex normals)
+    const Vec3f &n0 = N[trisIndex[triIndex * 3]]; 
+    const Vec3f &n1 = N[trisIndex[triIndex * 3 + 1]]; 
+    const Vec3f &n2 = N[trisIndex[triIndex * 3 + 2]]; 
+    hitNormal = (1 - uv.x - uv.y) * n0 + uv.x * n1 + uv.y * n2; 
+    hitNormal.normalize();  // normalize for safety, although N's are already normalized
+} 
+```
+
+---
 
