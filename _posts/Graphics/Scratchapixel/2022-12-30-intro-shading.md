@@ -103,3 +103,188 @@ void getSurfaceProperties(
 
 ---
 
+### 3 Lights
+
+> 这一章节没有太多有价值的内容，是一个简单的介绍，所以
+
+[略]
+
+---
+
+### 4 Diffuse and Lambertian Shading
+
+在计算机图形学中，我们可以轻易地实现漫反射物体的渲染，但是想要了解其中的原理，我们首先需要认识光线与表面交互的方式，这也是为什么我们需要讨论一点辐射度量学的内容。
+
+我们将着色点视为一个很小很小的表面，即**differential area**，记作$dA$。也就是说，我们不能将着色点视为一个纯粹的点，而是**实际拥有面积的一个较小区域**。因此，我们也不能将到达着色点$P$的光线视为简单的单束光，**而是一个横截面与$dA$面积相同的“光束”**，如下图所示：
+
+![](shad-light-beam2.png)
+
+在任意给定时间下，我们可以假设达到$dA$的光量是一个常数。我们从图中可以看出，随着光束与法线之间的夹角变大，光束的横截面也在变大，那么光束中的只有部分能量是达到$dA$的。
+
+![](shad-light-beam4.png)
+
+我们将以上现象总结为一句话：表面所接受的光量与表面法线与光线方向之间的夹角成正比，也就是**Lambertian's Cosine Law**。我们可以用数学表达式来描述夹角：
+
+
+$$
+cos\theta = N\cdot L
+$$
+
+
+现在，**我们已经知道了如何计算漫反射表面上所接收的光量，但这只是漫反射着色问题的一个方面，我们还需要知道漫反射表面向环境中，特别是观察方向上所反射的光量**。我们前面提到过，当光能到达$P$时，部分光线被吸收，部分光线会被反射，这就是表面的反照率参数，它定义了反射光线在全部入射光线中的比例：
+
+
+$$
+\text{albedo} = \frac{\text{reflected light}}{\text{incident light}}
+$$
+
+
+我们在本篇博客的第一个章节中提到，漫反射表面有一个特殊的性质，那就是它们会在入射点上方的每个方向上均匀地反射照射在其表面的光。也就是说，漫反射材质所反射的能量会被重新分配到$P$所在的半球表面上。所以，我们可以使用积分来表示漫反射材质所反射的光量：
+
+
+$$
+\text{Amount of Reflected Light (P)}=\int_{\Omega}\rho_d \cdot \text{Light Energy}\cdot cos\theta d\omega
+$$
+
+
+最终我们推导可以得到：
+
+
+$$
+\rho_d \cdot \pi \leq 1
+$$
+
+
+理论上来说，表面的反照率参数是一个范围在$[0, 1]$之间的 值，但这样显然无法满足不等式成立的要求。唯一的解决办法是，将反照率除以$\pi$，从而确保表面反射的光量不会超出接收的光量。所以，最终我们得到的公式为：
+
+
+$$
+\text{Diffuse Surface Color}=\frac{\rho_d}{\pi} \cdot L_i \cdot cos\theta
+$$
+
+在这里，**我们可以将反照率除以$\pi$视为将积分结果进行归一化**
+
+---
+
+### 5 Lights & Shadows
+
+在本章节中，我们将了解阴影是如何添加到图像中的。
+
+阴影的存在使得渲染效果更加真实。在CG中，如何渲染阴影取决于解决可见性问题的算法：
+
+- 在光栅化中，我们无法在单个pass中就完成阴影的绘制，而是需要先从光源的视角来预计算物体的可见性，将结果存储在shadow map中。
+- 在光线追踪中，从primary ray与物体的交点位置，构建shadow ray，如果shadow ray上存在其他物体，那么交点就在阴影中。
+
+下面是在光线追踪算法中对应的伪代码：
+
+```c++
+Vec3f castRay( 
+    const Vec3f &orig, const Vec3f &dir, 
+    const std::vector<std::unique_ptr<Object>> &objects, 
+    const std::unique_ptr<DistantLight> &light, 
+    const Options &options) 
+{ 
+    Vec3f hitColor = options.backgroundColor; 
+    IsectInfo isect; 
+    if (trace(orig, dir, objects, isect)) { 
+        Vec3f hitPoint = orig + dir * isect.tNear; 
+        Vec3f hitNormal; 
+        Vec2f hitTexCoordinates; 
+        isect.hitObject->getSurfaceProperties(hitPoint, dir, isect.index, isect.uv, hitNormal, hitTexCoordinates); 
+        Vec3f L = -light->dir; 
+        IsectInfo isectShad; 
+        bool vis = !trace(hitPoint + hitNormal * options.bias, L, objects, isectShad, kShadowRay); 
+        hitColor = vis * isect.hitObject->albedo * light->intensity * light->color * std::max(0.f, hitNormal.dotProduct(L)); 
+    } 
+ 
+    return hitColor; 
+} 
+```
+
+当然这段代码只是示意，存在着一定的优化空间
+
+#### 5.1 Shadow-Acne: Avoiding Self-Intersection
+
+计算阴影有一个很普遍的问题就是**shadow-acne**。它出现的原因是3D引擎中有限的数字精度，进而导致导致primary ray与物体的交点位于表面下方。在这种情况下，**指向光源的shadow ray就会与该物体自身的表面相交**，即所谓的"self-intersection"，进而导致错误的阴影出现。如下图所示：
+
+![](shad-shadows3.png)
+
+有若干种解决减少shadow-acne的方法，最直接的思路是使用double精度。或者，我们使用上图中所展示的技巧，也就是将shadow ray的原点朝着表面法线的方向移动“恰当”的距离。而具体要如何界定这个距离，则需要视情况而考虑，我们将这个距离称为shadow bias。
+
+---
+
+### 6 Spherical Light
+
+> 我们会在其他博客中更详细讨论有关内容
+
+[略]
+
+---
+
+### 7 Multile Lights
+
+[略]
+
+---
+
+### 8 Reflection, Refraction and Fresnel
+
+我们在本章节中要讨论的问题是，对于透明物体，如何计算有多少光被折射，同时有多少光被反射。为了回答这个问题，我们还需要对菲涅尔效应有一定的了解。
+
+#### 8.1 Reflection
+
+我们先讨论反射吧，这基本上是最简单光线-物质之间的交互形式了。**反射定律告诉我们，反射角度等于入射角度**。当我们一直入射角度与法线向量时，可以轻易地计算出反射方向：
+
+
+$$
+R=I-2(N\cdot L)N
+$$
+
+
+反射的光线只有在其方向与观察方向相同时才能观察到，也就是说反射是**view-dependent**
+
+在光线追踪算法中，模拟反射是比较简单的。如果camera ray所相交的对象具有反射的材质，那么我们就可以根据入射方向与法线计算出反射方向，接着我们递归地调用`castRay()`，将反射关系的颜色值赋予camera ray。当然，这种方法只能产生完美且清晰的反射。我们会在后续的博客中探讨如何创建出模糊的反射。
+
+我们可以使用下面这段代码来实现反射，需要注意的是，为了便于从背景中识别出场景中的平面，我们对反射进行一定程度的衰减。这并非是错误的计算，实际上类似于镜子的表面也无法百分百反射入射光线，此外菲涅尔效应同样会影响反射的光量。
+
+```c++
+Vec3f reflect(const Vec3f &I, const Vec3f &N) 
+{ 
+    return I - 2 * dotProduct(I, N) * N; 
+} 
+ 
+Vec3f castRay( 
+    const Vec3f &orig, const Vec3f &dir, 
+    const std::vector<std::unique_ptr<Object>> &objects, 
+    const std::vector<std::unique_ptr<Light>> &lights, 
+    const Options &options, 
+    const uint32_t & depth = 0) 
+{ 
+    if (depth > options.maxDepth) return options.backgroundColor; 
+    ... 
+    if (trace(orig, dir, objects, isect)) { 
+        ... 
+        switch (isect.hitObject->type) { 
+            case kDiffuse: 
+            ... 
+            case kReflection: 
+            { 
+                Vec3f R = reflect(dir, hitNormal); 
+                hitColor += 0.8 * castRay(hitPoint + hitNormal * options.bias, R, objects, lights, options, depth + 1); 
+                break; 
+            } 
+            ... 
+        } 
+    } 
+    ... 
+ 
+    return hitColor; 
+} 
+```
+
+为了避免无限递归，同时也为了减少一定的渲染成本，我们通常会限制递归的次数，称为ray depth。
+
+---
+
+#### 8.2 Refraction
+
