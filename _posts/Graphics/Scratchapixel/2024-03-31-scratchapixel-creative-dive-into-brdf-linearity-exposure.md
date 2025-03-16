@@ -1,37 +1,20 @@
 ---
-title: Introduction to BRDFs
-date: 2024-09-21 23:38 +0800
+title: A Creative Dive into BRDF, Linearity, and Exposure
+date: 2024-03-31 23:38 +0800
 categories: [Graphics, Scratchpixel]
 media_subpath: /assets/img/Graphics/Scratchapixel/
 math: true
 ---
 
-### Concept of BRDF
+### 1 An Introduction for Artists to BRDFs and Radiometry
 
-在众多的着色模型中，shading functions都围绕两个变量展开：**入射光线的方向**与**观察方向**。由此我们可以给出一个抽象的数学表达式：
+#### 1.1 Radiometry: Defining Relations between Light and Matter
 
+辐射度量学是一门研究包含可见光在内的电磁辐射测量的学科，它是计算机图形学中模拟光线与物质交互行为的基础。
 
-$$
-f_R(\omega_o, \omega_i)
-$$
+#### 1.2 Radiometry Terms: Flux, Irradiance, and Radiance
 
-其中，$\omega_o$与$\omega_i$分别表示观**察方向**与**入射方向**和shading point处**法线向量**的夹角。
-
-在计算机图形学中，我们将这个函数称为**双向反射分布函数**，简称为**BRDF**。BRDF的意义在于，**对于给定的入射方向，BRDF返回在观察方向上反射的光量。**
-
-BRDFs有很多实现方式，而一个好的BRDF需要满足以下要求：
-
-- 在入射方向与反射方向的有效范围内，BRDF始终是一个**正函数**
-- 满足**对称性**，当入射方向与观察方向交换时，函数返回的结果不变
-- 满足**能量守恒**定律，即反射光线的能量小于等于入射光线的能量
-
----
-
-### Radiometry
-
-在计算机图形学中，辐射度量学通常**用于描述和模拟光线的物理行为**，为真实感图形渲染（如全局光照和路径追踪）提供理论基础。在深度理解BRDF之前，我们有必要先了解一些辐射度量学中的术语。
-
-首先，光可以被看作是在空间中传播、携带能量的一系列光子的集合。当我们讨论一个物体所发出的光的总量时，实际上所考虑的是该物体所发出的光子的数量。而在计算机图形学中，有关于光的物理量中，我们最常关注的就是光的能量，具体来说，是物体表面所**接收**的光量与**反射**的光量。
+首先，**光可以被看作是在空间中沿直线传播、携带能量的一系列光子的集合**。当我们讨论一个物体所发出的光的总量时，实际上所考虑的是**该物体所发出的光子的数量**。而在计算机图形学中，我们最常关注的就是光的能量，具体来说，是物体表面所**接收**的光量与**反射**的光量。
 
 用于表示光的能量的物理量为**Flux光通量**，单位为瓦特，记作$W$。flux光通量定义了单位时间内通过一个给定表面的光子数量。
 
@@ -53,7 +36,6 @@ BRDFs有很多实现方式，而一个好的BRDF需要满足以下要求：
 - **Irradiance辐照度**，记作$E$，单位为$W\cdot m^{-2}$
 - **Radiance辐照亮度**，记作$L$，单位为$W\cdot m^{-2}\cdot sr^{-1}$
 
----
 
 ### Radiometry Equations
 
@@ -105,7 +87,6 @@ L(\omega_o)=\int_{\Omega}f_rdE(\omega_i)=\int_{\Omega}f_rcos(\theta _i)L(\omega_
 $$
 
 
----
 
 ### A BRDF for a Diffuse Surface
 

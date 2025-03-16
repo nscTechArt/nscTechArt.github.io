@@ -288,3 +288,72 @@ Vec3f castRay(
 
 #### 8.2 Refraction
 
+> 在本小节中，我们只讨论clear transparent objects，例如水、玻璃等，因为很多透明物体会对穿过其中的光产生衰减作用。
+
+光线从一个透明介质到达另一个透明介质时，其方向会发生改变。新的光线方向取决于两个因素，**入射角度**与**新介质的IOR**。
+
+我们知道光线在真空中的速度是一个常数，记为$c$。当光线在任意其他介质中时，速度会所降低，我们记为$v$。那么IOR可以简单定义为：
+
+
+$$
+\eta = \frac{c}{v}
+$$
+
+
+折射现象有Snell's Law描述：给定两个介质，则入射角度与折射角度的sin值的比值与两个介质的IOR的反比相等。用数学表达式描述为：
+
+
+$$
+\frac{sin\theta_1}{sin\theta_2}=\frac{\eta_2}{\eta_1}
+$$
+
+
+现在我们的问题是，如何根据已知条件，推导出折射方向$T$呢？
+
+![](shad-refraction7.png)
+
+> 这里省略掉推导过程
+
+
+$$
+T=\eta I + (\eta c_1 - c_2)N
+$$
+
+
+其中：
+
+
+$$
+\begin{array}{l}
+\eta = \dfrac{\eta_1}{\eta_2},\\
+c_1 = \cos(\theta_1) = N \cdot I,\\
+c_2 = \sqrt{1 - \left( \dfrac{n_1}{n_2} \right) ^2 \sin^2(\theta_1)} \rightarrow \sqrt{1 - \left( \dfrac{n_1}{n_2} \right) ^2 (1 - \cos^2(\theta_1))}
+\end{array}
+$$
+
+
+折射现象中还有一个需要我们注意的细节。在光线从IOR相对较低的介质到达IOR相对较高的介质的情况下，当入射角度大于某个被称为**critical angle**的临界值时，全部入射光线都会被反射，不存在任何折射。这种现象被称为**total internal reflection**。
+
+![](shad-refraction9.png)
+
+#### 8.3 Fresnel
+
+我们前面提到过，诸如玻璃、水这种透明物体，具有具有反射性与折射性。对于这类透明物体，反射的光量与折射的光量取决于入射光线的角度：角度越大，反射光线所占的比例就越大。同时我们根据能量守恒定律，我们知道反射光量与折射光量之和就等于入射光量。
+
+菲涅尔公式用于计算反射光线与折射光线之间的比值。公式背后的原理及其推导过程不是本小节的重点，我们只需要了解，我们需要使用两个不同的等式分别计算光线的两个组成部分（平行与垂直的偏振光）的折射所占的比例：
+
+
+$$
+\begin{array}{l}
+F_{R\parallel} = \left( \dfrac{\eta_2 \cos\theta_1 - \eta_1 \cos \theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos \theta_2} \right)^2,\\
+F_{R\perp} = \left( \dfrac{\eta_1 \cos\theta_2 - \eta_2 \cos \theta_1}{\eta_1 \cos\theta_2 + \eta_2 \cos \theta_1} \right)^2.
+\end{array}
+$$
+
+
+而最终的反射比例是以上两个值的平均数：
+
+
+$$
+F_R = \dfrac{1}{2}(F_{R\parallel} + F_{R\perp}).
+$$
