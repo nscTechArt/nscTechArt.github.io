@@ -1,8 +1,8 @@
 ---
 title: Working with Modern Vulkan
 date: 2024-09-28 14:59 +0800
-categories: [Graphics, Modern Vulkan Cookbook]
-media_subpath: /assets/img/Graphics/LearnVulkan/
+categories: [Graphics, Vulkan Collections]
+media_subpath: /assets/img/Graphics/vulkan collections/
 math: false
 ---
 

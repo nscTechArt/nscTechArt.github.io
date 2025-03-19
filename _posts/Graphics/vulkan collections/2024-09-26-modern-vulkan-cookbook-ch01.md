@@ -1,8 +1,8 @@
 ---
 title: Vulkan Core Concepts
 date: 2024-09-26 22:41 +0800
-categories: [Graphics, Modern Vulkan Cookbook]
-media_subpath: /assets/img/Graphics/LearnVulkan/
+categories: [Graphics, Vulkan Collections]
+media_subpath: /assets/img/Graphics/vulkan collections/
 math: false
 ---
 

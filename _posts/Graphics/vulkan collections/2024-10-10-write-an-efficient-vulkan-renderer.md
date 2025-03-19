@@ -1,8 +1,8 @@
 ---
 title: Writing an efficient Vulkan renderer
 date: 2024-10-10 21:42 +0800
-categories: [Graphics, Every Thing About Vulkan]
-media_subpath: /assets/img/Graphics/LearnVulkan/
+categories: [Graphics, Vulkan Collections]
+media_subpath: /assets/img/Graphics/vulkan collections/
 math: false
 ---
 

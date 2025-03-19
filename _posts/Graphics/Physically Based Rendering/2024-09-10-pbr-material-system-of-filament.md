@@ -2,7 +2,7 @@
 title: Material System in Filament
 date: 2024-09-10 14:57 +0800
 categories: [Graphics, Physical Based Rendering]
-media_subpath: /assets/img/Graphics/PhysicallyBasedRendering/
+media_subpath: /assets/img/Graphics/pbr/
 math: true
 ---
 

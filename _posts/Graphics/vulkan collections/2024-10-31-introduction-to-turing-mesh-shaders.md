@@ -1,8 +1,8 @@
 ---
 title: Introduction to Turing Mesh Shaders
 date: 2024-10-31 11:31 +0800
-categories: [Graphics, GPU Driven Rendering]
-media_subpath: /assets/img/Graphics/gpudrivenrendering/
+categories: [Graphics, Vulkan Collections]
+media_subpath: /assets/img/Graphics/vulkan collections/
 math: false
 ---
 
