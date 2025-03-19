@@ -2,7 +2,7 @@
 title: Crash Course in BRDF Implementation
 date: 2023-06-19 14:57 +0800
 categories: [Graphics, Physical Based Rendering]
-media_subpath: /assets/img/Graphics/PhysicallyBasedRendering/
+media_subpath: /assets/img/Graphics/pbr/
 math: true
 ---
 
