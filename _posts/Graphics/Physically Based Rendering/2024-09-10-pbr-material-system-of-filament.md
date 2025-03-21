@@ -644,9 +644,7 @@ float V_SmithGGXCorrelated_Anisotropic(float at, float ab, float ToV, float BoV,
 
 
 $$
-\begin{equation}
-D_{velvet}(v,h,\alpha) = \frac{1}{\pi(1 + 4\alpha^2)} (1 + 4 \frac{exp\left(\frac{-{cot}^2\theta_{h}}{\alpha^2}\right)}{{sin}^4\theta_{h}})
-\end{equation}
+D_{velvet}(v,h,\alpha)=\frac{1}{\pi(1+4\alpha^2)}(1+4\frac{exp\big( \frac{-cot^2\theta_h}{\alpha^2} \big)}{sin^4\theta_h})
 $$
 
 
