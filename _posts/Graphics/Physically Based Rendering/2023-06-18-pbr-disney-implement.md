@@ -71,4 +71,3 @@ $$
 F_{D90}=0.5+2*roughness*cos^2\theta_d
 $$
 
-
