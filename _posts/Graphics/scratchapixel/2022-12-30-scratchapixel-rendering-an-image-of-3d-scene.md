@@ -8,6 +8,7 @@ math: true
 
 > [Rendering an Image of a 3D Scene](https://www.scratchapixel.com/lessons/3d-basic-rendering/rendering-3d-scene-overview/rendering-3d-scene.html)
 
-### 1 a 3D Scene
+### 1 A 3D Scene
 
-绝大多数渲染API都会讲不同的几何类型转换为三角形网格体，例如
+绝大多数渲染API都会**将不同的几何类型转换为三角形网格体**。
+
