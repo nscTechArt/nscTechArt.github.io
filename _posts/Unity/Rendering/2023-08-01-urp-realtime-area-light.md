@@ -1,14 +1,14 @@
 ---
 title: URP中实现实时面光源
-date: 2023-12-01 09:40 +0800
+date: 2023-08-01 09:40 +0800
 categories: [Unity, Rendering]
-media_subpath: /assets/img/23-12-01/
-tag: [Unity, AreaLight]
+media_subpath: /assets/img/Unity/rendering
+tag: [Unity]
 math: true
 ---
-### Motivation
+### 1 Motivation
 
-Cozy Space是一个装修模拟类游戏。它具有以下特点：
+[Cozy Space on Steam](https://store.steampowered.com/app/2524480/Cozy_Space/)是一个装修模拟类游戏。它具有以下特点：
 
 - 灵活的房间户型设计：玩家可以构建任意的多边形房间
 - 时间/天气系统：玩家可以修改游戏中的时间段与天气，从而影响房间内的光照与氛围
@@ -18,7 +18,7 @@ Cozy Space是一个装修模拟类游戏。它具有以下特点：
 
 - 平行光不适合作为封闭室内的照明来源，而更适合配合窗户和窗帘，营造室内氛围
 - 由于房间户型是相对任意的，对于较为复杂的房间（例如一个1x6的走廊），点光源和聚光灯无法提供较好的照明效果
-- 游戏中的所有家具都是可以自由拖放的，不存在静态对象，意味着不能使用lightmap等技术
+- 游戏中的所有家具都是可以自由拖放的，不存在静态对象，意味着不能使用光照烘焙等技术
 - 基于LTC的实时面光源技术能够配合PBR材质着色，与项目美术资产不冲突，能够实现高质量的室内照明
 
 ### LTC Area Light的理论基础
