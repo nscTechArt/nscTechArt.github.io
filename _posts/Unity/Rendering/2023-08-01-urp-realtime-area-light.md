@@ -8,7 +8,7 @@ math: true
 ---
 ### 1 Motivation
 
-[Cozy Space on Steam](https://store.steampowered.com/app/2524480/Cozy_Space/)是一个装修模拟类游戏。它具有以下特点：
+[Cozy Space](https://store.steampowered.com/app/2524480/Cozy_Space/)是一个装修模拟类游戏。它具有以下特点：
 
 - 灵活的房间户型设计：玩家可以构建任意的多边形房间
 - 时间/天气系统：玩家可以修改游戏中的时间段与天气，从而影响房间内的光照与氛围
@@ -21,16 +21,26 @@ math: true
 - 游戏中的所有家具都是可以自由拖放的，不存在静态对象，意味着不能使用光照烘焙等技术
 - 基于LTC的实时面光源技术能够配合PBR材质着色，与项目美术资产不冲突，能够实现高质量的室内照明
 
-### LTC Area Light的理论基础
+## 2 实现原理
 
-对于面光源来说，我们需要在面光源的quad范围内对BRDF进行积分，但是我们会面临两个问题：
+LTC的核心思想是：
 
-[Real-Time Polygonal-Light Shading with Linearly Transformed Cosines](https://www.youtube.com/watch?v=ZLRgEN7AQgM&t=3s)
+1. **将复杂的BRDF积分转换为简单的余弦分布积分**
+2. **通过线性变换矩阵（3x3矩阵）建立两个分布之间的映射关系**
+3. **预计算所有可能的参数组合存储到纹理（LUT）**
 
-[LTC.pdf - Google Drive](https://drive.google.com/file/d/0BzvWIdpUpRx_d09ndGVjNVJzZjA/view?resourcekey=0-21tmiqk55JIZU8UoeJatXQ)
-
-1. 在球面上
+我们假设原始分布为各向同性GGX模型，通过线性变换矩阵$M$将其转换到余弦分布：
 
 
+$$
+D_o(\omega_o)=\frac{D(M^{-1}\omega_o)}{|M|\cdot (M^{-T}\omega_0)_z}
+$$
+
+
+其中：
+
+- $D_o$是变换后的余弦分布
+- $|M|$为矩阵的行列式
+- $(M^{-T}\omega_o)_z$是变换后向量在Z轴的分量
 
 ![](areaLightBounds.png)
