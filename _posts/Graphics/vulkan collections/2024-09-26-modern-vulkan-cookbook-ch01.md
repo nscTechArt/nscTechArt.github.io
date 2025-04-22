@@ -1,5 +1,5 @@
 ---
-title: Vulkan Core Concepts
+title: Modern Vulkan Cookbook第一章阅读笔记
 date: 2024-09-26 22:41 +0800
 categories: [Graphics, Vulkan Collections]
 media_subpath: /assets/img/Graphics/vulkan collections/
