@@ -7,6 +7,9 @@
   --next-text-color: #333;
   --next-headings-color: #262a30;
   --next-link-color: rgb(0, 160, 160);
+  --next-inline-code-bg: #f0f0f0;
+  --next-inline-code-color: rgb(0, 160, 160);
+  --next-inline-code-border: #dfdfdf;
   --next-math-block-bg: #f3f3f3;
   --next-math-block-border: #d7d7d7;
   --next-blockquote-border: #ddd;
@@ -22,6 +25,9 @@ html[data-mode='dark'] {
   --next-text-color: #ddd;
   --next-headings-color: #ddd;
   --next-link-color: rgb(0, 200, 200);
+  --next-inline-code-bg: #2b2b2b;
+  --next-inline-code-color: rgb(0, 160, 160);
+  --next-inline-code-border: #3d3d3d;
   --next-math-block-bg: #202020;
   --next-math-block-border: #4a4a4a;
   --next-blockquote-border: #555;
@@ -41,7 +47,9 @@ article .content {
 article .content,
 article .content p,
 article .content li {
-  font-family: Overpass, 'GlowSansSC', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family:
+    Overpass, 'GlowSansSC', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
 }
 
 article .content p {
@@ -81,6 +89,30 @@ article .content a:not(.img-link) {
 
 article .content a:not(.img-link):hover {
   text-decoration: underline;
+}
+
+/* Inline code only: intentionally excludes pre > code blocks. */
+article .content p > code.highlighter-rouge,
+article .content li > code.highlighter-rouge,
+article .content blockquote p > code.highlighter-rouge,
+article .content td > code.highlighter-rouge,
+article .content a > code.highlighter-rouge,
+article .content :not(pre) > code.language-plaintext.highlighter-rouge {
+  background-color: var(--next-inline-code-bg) !important;
+  color: var(--next-inline-code-color) !important;
+  border: 1px solid var(--next-inline-code-border) !important;
+  border-radius: 3px !important;
+  display: inline-block;
+  font-family:
+    'JetBrains Mono', Consolas, 'Liberation Mono', monospace !important;
+  font-size: 0.88em !important;
+  font-variant-ligatures: none;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  padding: 0.05em 0.35em !important;
+  vertical-align: baseline;
+  transform: translateY(-0.02em);
 }
 
 article .content blockquote {
