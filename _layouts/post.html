@@ -15,6 +15,30 @@ script_includes:
 
 <link rel="stylesheet" href="{{ '/assets/css/post-next.css' | relative_url }}">
 
+{% assign lock_cfg = site.post_folder_lock %}
+{% assign folder_locked = false %}
+{% assign lock_scope = '' %}
+{% if page.collection == 'posts' and lock_cfg and lock_cfg.enabled %}
+  {% assign page_path_down = page.path | downcase %}
+  {% for folder_item in lock_cfg.folders %}
+    {% if folder_item.path %}
+      {% assign folder_path_down = folder_item.path | downcase %}
+      {% if folder_path_down != '' and page_path_down contains folder_path_down %}
+        {% assign folder_locked = true %}
+        {% assign lock_scope = folder_item.category | default: folder_item.path | slugify %}
+        {% break %}
+      {% endif %}
+    {% else %}
+      {% assign folder_path_down = folder_item | downcase %}
+      {% if folder_path_down != '' and page_path_down contains folder_path_down %}
+        {% assign folder_locked = true %}
+        {% assign lock_scope = folder_item | slugify %}
+        {% break %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
 <article class="px-1" data-toc="{{ enable_toc }}">
   <header>
     <h1 data-toc-skip>{{ page.title }}</h1>
@@ -41,7 +65,6 @@ script_includes:
         {% capture src %}src="{{ page.image.path | default: page.image }}"{% endcapture %}
         {% capture class %}class="preview-img{% if page.image.no_bg %}{{ ' no-bg' }}{% endif %}"{% endcapture %}
         {% capture alt %}alt="{{ page.image.alt | xml_escape | default: "Preview Image" }}"{% endcapture %}
-
         {% if page.image.lqip %}
           {%- capture lqip -%}lqip="{{ page.image.lqip }}"{%- endcapture -%}
         {% endif %}
@@ -123,58 +146,183 @@ script_includes:
     </dialog>
   {% endif %}
 
-  <div class="content">
-    {{ content }}
-  </div>
+  {% if folder_locked %}
+    <style>
+      .folder-lock-card {
+        margin: 1.25rem 0;
+        padding: 1.25rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.75rem;
+        background: var(--main-bg);
+      }
 
-  <div class="post-tail-wrapper text-muted">
-    <!-- categories -->
-    {% if page.categories.size > 0 %}
-      <div class="post-meta mb-3">
-        <i class="far fa-folder-open fa-fw me-1"></i>
-        {% for category in page.categories %}
-          <a href="{{ site.baseurl }}/categories/{{ category | slugify | url_encode }}/">{{ category }}</a>
-          {%- unless forloop.last -%},{%- endunless -%}
-        {% endfor %}
+      .folder-lock-row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .folder-lock-card input {
+        width: 9rem;
+      }
+
+      .folder-lock-msg {
+        margin-top: 0.75rem;
+        color: var(--bs-danger);
+      }
+    </style>
+
+    <section class="folder-lock-card" id="folder-lock-card">
+      <h3>此内容需要密码访问</h3>
+      <p>请先在对应目录页完成解锁，或直接输入四位数字密码。</p>
+      <div class="folder-lock-row">
+        <input id="folder-lock-input" class="form-control" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="4位密码">
+        <button id="folder-lock-btn" class="btn btn-primary" type="button">解锁</button>
       </div>
-    {% endif %}
+      <div id="folder-lock-msg" class="folder-lock-msg" role="alert" aria-live="polite"></div>
+    </section>
 
-    <!-- tags -->
-    {% if page.tags.size > 0 %}
-      <div class="post-tags">
-        <i class="fa fa-tags fa-fw me-1"></i>
-        {% for tag in page.tags %}
-          <a
-            href="{{ site.baseurl }}/tags/{{ tag | slugify | url_encode }}/"
-            class="post-tag no-text-decoration"
-          >
-            {{- tag -}}
-          </a>
-        {% endfor %}
+    <div id="folder-lock-content" style="display:none;">
+      <div class="content">
+        {{ content }}
       </div>
-    {% endif %}
 
-    <div
-      class="
-        post-tail-bottom
-        d-flex justify-content-between align-items-center mt-5 pb-2
-      "
-    >
-      <div class="license-wrapper">
-        {% if site.data.locales[lang].copyright.license.template %}
-          {% capture _replacement %}
-        <a href="{{ site.data.locales[lang].copyright.license.link }}">
-          {{ site.data.locales[lang].copyright.license.name }}
-        </a>
-        {% endcapture %}
-
-          {{ site.data.locales[lang].copyright.license.template | replace: ':LICENSE_NAME', _replacement }}
+      <div class="post-tail-wrapper text-muted">
+        {% if page.categories.size > 0 %}
+          <div class="post-meta mb-3">
+            <i class="far fa-folder-open fa-fw me-1"></i>
+            {% for category in page.categories %}
+              <a href="{{ site.baseurl }}/categories/{{ category | slugify | url_encode }}/">{{ category }}</a>
+              {%- unless forloop.last -%},{%- endunless -%}
+            {% endfor %}
+          </div>
         {% endif %}
-      </div>
 
-      {% include post-sharing.html lang=lang %}
+        {% if page.tags.size > 0 %}
+          <div class="post-tags">
+            <i class="fa fa-tags fa-fw me-1"></i>
+            {% for tag in page.tags %}
+              <a href="{{ site.baseurl }}/tags/{{ tag | slugify | url_encode }}/" class="post-tag no-text-decoration">
+                {{- tag -}}
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="post-tail-bottom d-flex justify-content-between align-items-center mt-5 pb-2">
+          <div class="license-wrapper">
+            {% if site.data.locales[lang].copyright.license.template %}
+              {% capture _replacement %}
+                <a href="{{ site.data.locales[lang].copyright.license.link }}">
+                  {{ site.data.locales[lang].copyright.license.name }}
+                </a>
+              {% endcapture %}
+
+              {{ site.data.locales[lang].copyright.license.template | replace: ':LICENSE_NAME', _replacement }}
+            {% endif %}
+          </div>
+
+          {% include post-sharing.html lang=lang %}
+        </div>
+      </div>
     </div>
-    <!-- .post-tail-bottom -->
-  </div>
-  <!-- div.post-tail-wrapper -->
+
+    <script>
+      (function () {
+        var input = document.getElementById('folder-lock-input');
+        var button = document.getElementById('folder-lock-btn');
+        var msg = document.getElementById('folder-lock-msg');
+        var card = document.getElementById('folder-lock-card');
+        var content = document.getElementById('folder-lock-content');
+        var expected = '{{ lock_cfg.password | default: "1234" | escape }}';
+        var unlockKey = 'post-folder-lock:{{ lock_scope | escape }}';
+
+        if (!input || !button || !msg || !card || !content) {
+          return;
+        }
+
+        if (window.sessionStorage && sessionStorage.getItem(unlockKey) === 'ok') {
+          content.style.display = '';
+          card.style.display = 'none';
+          return;
+        }
+
+        function unlock() {
+          var value = (input.value || '').trim();
+
+          if (!/^\d{6}$/.test(value)) {
+            msg.textContent = '请输入四位数字密码。';
+            return;
+          }
+
+          if (value !== expected) {
+            msg.textContent = '密码错误，请重试。';
+            return;
+          }
+
+          content.style.display = '';
+          card.style.display = 'none';
+
+          if (window.sessionStorage) {
+            sessionStorage.setItem(unlockKey, 'ok');
+          }
+        }
+
+        button.addEventListener('click', unlock);
+        input.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            unlock();
+          }
+        });
+      })();
+    </script>
+  {% else %}
+    <div class="content">
+      {{ content }}
+    </div>
+
+    <div class="post-tail-wrapper text-muted">
+      <!-- categories -->
+      {% if page.categories.size > 0 %}
+        <div class="post-meta mb-3">
+          <i class="far fa-folder-open fa-fw me-1"></i>
+          {% for category in page.categories %}
+            <a href="{{ site.baseurl }}/categories/{{ category | slugify | url_encode }}/">{{ category }}</a>
+            {%- unless forloop.last -%},{%- endunless -%}
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <!-- tags -->
+      {% if page.tags.size > 0 %}
+        <div class="post-tags">
+          <i class="fa fa-tags fa-fw me-1"></i>
+          {% for tag in page.tags %}
+            <a
+              href="{{ site.baseurl }}/tags/{{ tag | slugify | url_encode }}/"
+              class="post-tag no-text-decoration"
+            >
+              {{- tag -}}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="post-tail-bottom d-flex justify-content-between align-items-center mt-5 pb-2">
+        <div class="license-wrapper">
+          {% if site.data.locales[lang].copyright.license.template %}
+            {% capture _replacement %}
+              <a href="{{ site.data.locales[lang].copyright.license.link }}">
+                {{ site.data.locales[lang].copyright.license.name }}
+              </a>
+            {% endcapture %}
+
+            {{ site.data.locales[lang].copyright.license.template | replace: ':LICENSE_NAME', _replacement }}
+          {% endif %}
+        </div>
+
+        {% include post-sharing.html lang=lang %}
+      </div>
+    </div>
+  {% endif %}
 </article>

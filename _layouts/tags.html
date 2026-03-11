@@ -1,0 +1,41 @@
+---
+layout: page
+# All the Tags of posts.
+---
+
+{% assign visible_posts = site.posts | where_exp: 'item', 'item.protected_by_folder_lock != true' %}
+{% assign tags = '' | split: '' %}
+{% assign tag_sizes = '' | split: '' %}
+
+{% for t in site.tags %}
+  {% assign tag_name = t[0] %}
+  {% assign tag_count = visible_posts | where_exp: 'item', 'item.tags contains tag_name' | size %}
+
+  {% if tag_count > 0 %}
+    {% assign tags = tags | push: tag_name %}
+    {% capture tag_kv %}{{ tag_name }}::{{ tag_count }}{% endcapture %}
+    {% assign tag_sizes = tag_sizes | push: tag_kv %}
+  {% endif %}
+{% endfor %}
+
+{% assign sorted_tags = tags | sort_natural %}
+
+<div id="tags" class="d-flex flex-wrap mx-xl-2">
+  {% for t in sorted_tags %}
+    {% assign count = 0 %}
+    {% for tag_kv in tag_sizes %}
+      {% assign parts = tag_kv | split: '::' %}
+      {% if parts[0] == t %}
+        {% assign count = parts[1] %}
+        {% break %}
+      {% endif %}
+    {% endfor %}
+
+    <div>
+      <a class="tag" href="{{ t | slugify | url_encode | prepend: '/tags/' | append: '/' | relative_url }}">
+        {{ t -}}
+        <span class="text-muted">{{ count }}</span>
+      </a>
+    </div>
+  {% endfor %}
+</div>

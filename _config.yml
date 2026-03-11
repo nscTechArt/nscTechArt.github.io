@@ -224,3 +224,13 @@ jekyll-archives:
   permalinks:
     tag: /tags/:name/
     category: /categories/:name/
+
+# Simple post folder lock (visual gate only, not real security)
+post_folder_lock:
+  enabled: true
+  password: "474869" # change to your password
+  folders:
+    - path: "_posts/Graphics/vulkan collections/"
+      category: "vulkan-collections"
+    - path: "_posts/Unity/Rendering/"
+      category: "rendering"
