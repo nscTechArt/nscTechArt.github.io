@@ -230,7 +230,7 @@ post_folder_lock:
   enabled: true
   password: "474869" # change to your password
   folders:
-    - path: "_posts/Graphics/vulkan collections/"
-      category: "vulkan-collections"
-    - path: "_posts/Unity/Rendering/"
-      category: "rendering"
+    - path: "_posts/MentalSpa/"
+      category: "MentalSpa"
+    # - path: "_posts/Unity/Rendering/"
+    #   category: "rendering"

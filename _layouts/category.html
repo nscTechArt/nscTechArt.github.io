@@ -7,16 +7,11 @@ layout: page
 {% assign lock_cfg = site.post_folder_lock %}
 {% assign category_locked = false %}
 {% assign category_lock_scope = '' %}
-{% assign category_slug = page.title | slugify %}
 {% if lock_cfg and lock_cfg.enabled %}
-  {% for folder_item in lock_cfg.folders %}
-    {% assign item_category = '' %}
-    {% if folder_item.category %}
-      {% assign item_category = folder_item.category | slugify %}
-    {% endif %}
-    {% if item_category != '' and item_category == category_slug %}
+  {% for post in page.posts %}
+    {% if post.protected_by_folder_lock == true %}
       {% assign category_locked = true %}
-      {% assign category_lock_scope = item_category %}
+      {% assign category_lock_scope = post.folder_lock_scope | default: page.title | slugify %}
       {% break %}
     {% endif %}
   {% endfor %}
