@@ -163,3 +163,26 @@ article .content .table-wrapper > table tbody tr:nth-child(2n + 1) {
 article .content .table-wrapper > table tbody tr:hover {
   background: var(--next-table-hover);
 }
+
+article .content hr {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #ddd,
+    #ddd 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  border: 0;
+  height: 3px;
+  margin: 40px 0;
+}
+
+html[data-mode='dark'] article .content hr {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #444,
+    #444 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
