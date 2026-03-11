@@ -1,0 +1,101 @@
+<style>
+  .folder-lock-card {
+    margin: 1.25rem 0;
+    padding: 1.25rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    background: var(--main-bg);
+  }
+
+  .folder-lock-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .folder-lock-card input {
+    width: 9rem;
+  }
+
+  .folder-lock-msg {
+    margin-top: 0.75rem;
+    color: var(--bs-danger);
+  }
+</style>
+
+<section class="folder-lock-card" id="{{ include.card_id }}">
+  <h3>{{ include.title }}</h3>
+  <p>{{ include.description }}</p>
+  <div class="folder-lock-row">
+    <input
+      id="{{ include.input_id }}"
+      class="form-control"
+      type="password"
+      inputmode="numeric"
+      maxlength="6"
+      autocomplete="off"
+      placeholder="{{ include.placeholder | default: '4位密码' }}"
+    >
+    <button id="{{ include.button_id }}" class="btn btn-primary" type="button">{{ include.button_text }}</button>
+  </div>
+  <div id="{{ include.msg_id }}" class="folder-lock-msg" role="alert" aria-live="polite"></div>
+</section>
+
+<script>
+  (function () {
+    var expected = '{{ include.password | default: "1234" | escape }}';
+    var unlockKey = 'post-folder-lock:{{ include.scope | escape }}';
+
+    function initLockGate() {
+      var input = document.getElementById('{{ include.input_id }}');
+      var button = document.getElementById('{{ include.button_id }}');
+      var msg = document.getElementById('{{ include.msg_id }}');
+      var card = document.getElementById('{{ include.card_id }}');
+      var target = document.getElementById('{{ include.target_id }}');
+
+      if (!input || !button || !msg || !card || !target) {
+        return;
+      }
+
+      if (window.sessionStorage && sessionStorage.getItem(unlockKey) === 'ok') {
+        target.style.display = '';
+        card.style.display = 'none';
+        return;
+      }
+
+      function unlock() {
+        var value = (input.value || '').trim();
+
+        if (!/^\d{6}$/.test(value)) {
+          msg.textContent = '请输入四位数字密码。';
+          return;
+        }
+
+        if (value !== expected) {
+          msg.textContent = '密码错误，请重试。';
+          return;
+        }
+
+        target.style.display = '';
+        card.style.display = 'none';
+
+        if (window.sessionStorage) {
+          sessionStorage.setItem(unlockKey, 'ok');
+        }
+      }
+
+      button.addEventListener('click', unlock);
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          unlock();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initLockGate);
+    } else {
+      initLockGate();
+    }
+  })();
+</script>

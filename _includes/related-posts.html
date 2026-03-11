@@ -14,12 +14,12 @@
 {% assign match_posts = '' | split: '' %}
 
 {% for category in page.categories %}
-  {% assign candidates = site.categories[category] | where_exp: 'item', 'item.protected_by_folder_lock != true' %}
+  {% assign candidates = site.categories[category] | unlocked_posts %}
   {% assign match_posts = match_posts | push: candidates | uniq %}
 {% endfor %}
 
 {% for tag in page.tags %}
-  {% assign candidates = site.tags[tag] | where_exp: 'item', 'item.protected_by_folder_lock != true' %}
+  {% assign candidates = site.tags[tag] | unlocked_posts %}
   {% assign match_posts = match_posts | push: candidates | uniq %}
 {% endfor %}
 

@@ -2,7 +2,7 @@
 
 {% assign MAX_SIZE = 5 %}
 
-{% assign visible_posts = site.posts | where_exp: 'item', 'item.protected_by_folder_lock != true' %}
+{% assign visible_posts = site.posts | unlocked_posts %}
 {% assign all_list = '' | split: '' %}
 
 {% for post in visible_posts %}

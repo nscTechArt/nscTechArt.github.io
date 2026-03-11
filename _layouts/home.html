@@ -4,8 +4,9 @@ layout: default
 
 {% include lang.html %}
 
-{% assign all_pinned = site.posts | where: 'pin', 'true' | where_exp: 'item', 'item.protected_by_folder_lock != true' %}
-{% assign all_normal = site.posts | where_exp: 'item', 'item.pin != true and item.hidden != true and item.protected_by_folder_lock != true' %}
+{% assign unlocked = site.posts | unlocked_posts %}
+{% assign all_pinned = unlocked | where: 'pin', 'true' %}
+{% assign all_normal = unlocked | where_exp: 'item', 'item.pin != true and item.hidden != true' %}
 
 {% assign posts = '' | split: '' %}
 

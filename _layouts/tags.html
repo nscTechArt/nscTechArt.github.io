@@ -3,7 +3,7 @@ layout: page
 # All the Tags of posts.
 ---
 
-{% assign visible_posts = site.posts | where_exp: 'item', 'item.protected_by_folder_lock != true' %}
+{% assign visible_posts = site.posts | unlocked_posts %}
 {% assign tags = '' | split: '' %}
 {% assign tag_sizes = '' | split: '' %}
 
