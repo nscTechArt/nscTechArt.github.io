@@ -22,7 +22,7 @@ S_P=\text{diffuse()}*K_d+\text{specular()}*K_s
 $$
 
 
-其中$S_P$表示$P$的着色，$\text{diffuse()}$项就是我们在[上一篇博客](https://loveforyou.tech/posts/intro-shading/)中所讨论了漫反射着色，$\text{specular()}$项则是用于模拟物体光滑外观的项。我们通过两个参数$K_d$与$K_s$来分别控制两个项的强弱。我们将在后面深入讨论如何确定这两个参数的值，不过在那之前，我们需要先对$\text{specular()}$项有一个较为清楚的认识。
+其中$S_P$表示$P$的着色，$\text{diffuse()}$项就是我们在[上一篇博客](https://lovewithyou.tech/posts/intro-shading/)中所讨论了漫反射着色，$\text{specular()}$项则是用于模拟物体光滑外观的项。我们通过两个参数$K_d$与$K_s$来分别控制两个项的强弱。我们将在后面深入讨论如何确定这两个参数的值，不过在那之前，我们需要先对$\text{specular()}$项有一个较为清楚的认识。
 
 首先我们可以得出下一两点观察结果：
 

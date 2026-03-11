@@ -1131,7 +1131,7 @@ renderPassInfo.renderArea.extent = swapChainExtent;
 接下来的两个参数定义渲染区域范围，该区域决定了着色器加载和存储操作的有效范围。此区域外的像素将具有未定义值。为获得最佳性能，渲染区域尺寸应与附件尺寸完全一致。
 
 ```c++
-VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+VkClearValue clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
 renderPassInfo.clearValueCount = 1;
 renderPassInfo.pClearValues = &clearColor;
 ```

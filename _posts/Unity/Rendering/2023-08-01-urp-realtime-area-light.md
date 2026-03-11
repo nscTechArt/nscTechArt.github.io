@@ -45,7 +45,7 @@ $$
 
 ![](intro-lighting-spherical-polygon2.png)
 
-> [这篇博客（虽然还没写完）](https://loveforyou.tech/posts/scratchapixel-intro-lighting-part-two/)详细讨论了面光源在离线渲染中的实现方法
+> [这篇博客（虽然还没写完）](https://lovewithyou.tech/posts/scratchapixel-intro-lighting-part-two/)详细讨论了面光源在离线渲染中的实现方法
 
 #### 2.2 **Linearly Transformed Cosines**
 
