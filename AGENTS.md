@@ -5,21 +5,23 @@ This is a personal blog built on the [jekyll-theme-chirpy](https://github.com/co
 ## Build Commands
 
 ```bash
-./tools/run.sh        # Dev server with live reload (http://127.0.0.1:4000)
-./tools/test.sh       # Production build (used for CI/deployment checks)
+./tools/run.sh        # Dev server with live reload (Docker/container-preferred)
+./tools/test.sh       # Production build (CI/Docker validation only)
 ```
 
 ## Environment Notes
 
 - This project uses Bundler-based Jekyll workflow. Prefer running the two scripts above instead of ad-hoc `jekyll` commands.
+- This repo is typically run inside Docker. In local host environments, agents should not plan around running `./tools/run.sh` or `./tools/test.sh`.
+- Unless explicitly requested by the user (or the agent is confirmed to run inside the project's Docker environment), skip both scripts and rely on non-runtime checks.
 - If build fails with `bundler: command not found: jekyll` or Ruby dependency conflicts, check local Ruby version first.
 - `html-proofer ~> 5.0` requires Ruby `>= 3.1`; macOS system Ruby 2.6 is not sufficient for full build/test.
 - Keep timezone-sensitive content aligned with site config (`Asia/Shanghai`) and post dates using `+0800`.
 
 Recommended command order for agents:
-1. `bundle install`
-2. `./tools/run.sh` for local preview
-3. `./tools/test.sh` before final delivery
+1. Do static/file-level validation first (front matter, paths, links, category-folder consistency)
+2. `./tools/run.sh` only when user explicitly asks, or when running in the project's Docker environment
+3. `./tools/test.sh` only when user explicitly asks, or when running in the project's Docker/CI environment
 
 ## Post Conventions
 
