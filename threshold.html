@@ -7,6 +7,10 @@ search_exclude: true
 ---
 
 {% include lang.html %}
+
+{% assign HEAD_PREFIX = 'h_' %}
+{% assign LIST_PREFIX = 'l_' %}
+{% assign group_index = 0 %}
 {% assign hidden_posts = site.posts | where: 'secret', true | sort: 'date' | reverse %}
 
 <div class="content">
@@ -14,17 +18,142 @@ search_exclude: true
   <p>MentalSpa 会默认出现在这里，其他分类下你手动标记了 <code>secret: true</code> 的文章也会出现在这里。</p>
 
   {% if hidden_posts.size > 0 %}
-    <ul class="content ps-0 mt-4">
-      {% for post in hidden_posts %}
-        <li class="px-md-3 py-2">
-          <div class="d-flex justify-content-between gap-3 flex-wrap">
-            <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-            {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
-          </div>
-          <div class="text-muted small mt-1">{{ post.categories | join: ' / ' }}</div>
-        </li>
+    {% assign primary_categories = '' | split: '' %}
+
+    {% for post in hidden_posts %}
+      {% assign primary_category = post.categories[0] %}
+
+      {% if primary_category %}
+        {% unless primary_categories contains primary_category %}
+          {% assign primary_categories = primary_categories | push: primary_category %}
+        {% endunless %}
+      {% endif %}
+    {% endfor %}
+
+    {% assign primary_categories = primary_categories | sort %}
+
+    {% for primary_category in primary_categories %}
+      {% assign posts_of_category = hidden_posts | where_exp: 'item', 'item.categories[0] == primary_category' %}
+      {% assign sub_categories = '' | split: '' %}
+      {% assign uncategorized_posts = '' | split: '' %}
+
+      {% for post in posts_of_category %}
+        {% assign second_category = post.categories[1] %}
+
+        {% if second_category %}
+          {% unless sub_categories contains second_category %}
+            {% assign sub_categories = sub_categories | push: second_category %}
+          {% endunless %}
+        {% else %}
+          {% assign uncategorized_posts = uncategorized_posts | push: post %}
+        {% endif %}
       {% endfor %}
-    </ul>
+
+      {% assign sub_categories = sub_categories | sort %}
+      {% assign sub_categories_size = sub_categories | size %}
+      {% assign has_children = false %}
+
+      {% if sub_categories_size > 0 or uncategorized_posts.size > 0 %}
+        {% assign has_children = true %}
+      {% endif %}
+
+      <div class="card categories mt-4">
+        <div
+          id="{{ HEAD_PREFIX }}{{ group_index }}"
+          class="card-header d-flex justify-content-between hide-border-bottom"
+        >
+          <span class="ms-2">
+            <i class="far fa-folder fa-fw fa-sm"></i>
+            <span class="mx-2">{{ primary_category }}</span>
+
+            {% if sub_categories_size > 0 %}
+              <span class="text-muted small font-weight-light">
+                {{ sub_categories_size }}
+                {% if sub_categories_size > 1 %}
+                  {{ site.data.locales[lang].categories.category_measure.plural | default: site.data.locales[lang].categories.category_measure }}
+                {% else %}
+                  {{ site.data.locales[lang].categories.category_measure.singular | default: site.data.locales[lang].categories.category_measure }}
+                {% endif %}
+                ,
+              </span>
+            {% endif %}
+
+            <span class="text-muted small font-weight-light">
+              {{ posts_of_category.size }}
+              {% if posts_of_category.size > 1 %}
+                {{ site.data.locales[lang].categories.post_measure.plural | default: site.data.locales[lang].categories.post_measure }}
+              {% else %}
+                {{ site.data.locales[lang].categories.post_measure.singular | default: site.data.locales[lang].categories.post_measure }}
+              {% endif %}
+            </span>
+          </span>
+
+          {% if has_children %}
+            <a
+              href="#{{ LIST_PREFIX }}{{ group_index }}"
+              data-bs-toggle="collapse"
+              aria-expanded="true"
+              aria-label="{{ primary_category }}"
+            >
+              <i class="fas fa-fw fa-angle-down"></i>
+            </a>
+          {% endif %}
+        </div>
+
+        {% if has_children %}
+          <div id="{{ LIST_PREFIX }}{{ group_index }}" class="collapse show" aria-expanded="true">
+            <ul class="list-group">
+              {% for sub_category in sub_categories %}
+                {% assign sub_posts = posts_of_category | where_exp: 'item', 'item.categories[1] == sub_category' %}
+
+                <li class="list-group-item">
+                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>
+                      <i class="far fa-folder fa-fw fa-sm"></i>
+                      <span class="mx-2">{{ sub_category }}</span>
+                      <span class="text-muted small font-weight-light">
+                        {{ sub_posts.size }}
+                        {% if sub_posts.size > 1 %}
+                          {{ site.data.locales[lang].categories.post_measure.plural | default: site.data.locales[lang].categories.post_measure }}
+                        {% else %}
+                          {{ site.data.locales[lang].categories.post_measure.singular | default: site.data.locales[lang].categories.post_measure }}
+                        {% endif %}
+                      </span>
+                    </span>
+                  </div>
+
+                  <ul class="content ps-0 mt-3 mb-0">
+                    {% for post in sub_posts %}
+                      <li class="d-flex justify-content-between px-md-3">
+                        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+                        <span class="dash flex-grow-1"></span>
+                        {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </li>
+              {% endfor %}
+
+              {% if uncategorized_posts.size > 0 %}
+                <li class="list-group-item">
+                  <ul class="content ps-0 mb-0">
+                    {% for post in uncategorized_posts %}
+                      <li class="d-flex justify-content-between px-md-3">
+                        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+                        <span class="dash flex-grow-1"></span>
+                        {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </li>
+              {% endif %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+
+      {% assign group_index = group_index | plus: 1 %}
+    {% endfor %}
   {% else %}
     <p class="text-muted mt-4">当前没有隐藏文章。</p>
   {% endif %}
