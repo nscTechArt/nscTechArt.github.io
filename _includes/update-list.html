@@ -2,7 +2,7 @@
 
 {% assign MAX_SIZE = 5 %}
 
-{% assign visible_posts = site.posts | unlocked_posts %}
+{% assign visible_posts = site.posts %}
 {% assign all_list = '' | split: '' %}
 
 {% for post in visible_posts %}

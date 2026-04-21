@@ -225,12 +225,3 @@ jekyll-archives:
     tag: /tags/:name/
     category: /categories/:name/
 
-# Simple post folder lock (visual gate only, not real security)
-post_folder_lock:
-  enabled: true
-  password: "474869" # change to your password
-  folders:
-    - path: "_posts/MentalSpa/"
-      category: "MentalSpa"
-    # - path: "_posts/Unity/Rendering/"
-    #   category: "rendering"

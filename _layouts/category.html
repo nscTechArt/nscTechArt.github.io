@@ -4,19 +4,6 @@ layout: page
 ---
 {% include lang.html %}
 
-{% assign lock_cfg = site.post_folder_lock %}
-{% assign category_locked = false %}
-{% assign category_lock_scope = '' %}
-{% if lock_cfg and lock_cfg.enabled %}
-  {% for post in page.posts %}
-    {% if post.protected_by_folder_lock == true %}
-      {% assign category_locked = true %}
-      {% assign category_lock_scope = post.folder_lock_scope | default: page.title | slugify %}
-      {% break %}
-    {% endif %}
-  {% endfor %}
-{% endif %}
-
 <div id="page-category">
   <h1 class="ps-lg-2">
     <i class="far fa-folder-open fa-fw text-muted"></i>
@@ -24,39 +11,13 @@ layout: page
     <span class="lead text-muted ps-2">{{ page.posts | size }}</span>
   </h1>
 
-  {% if category_locked %}
-    {% include folder-lock-gate.html
-      card_id='category-lock-card'
-      input_id='category-lock-input'
-      button_id='category-lock-btn'
-      msg_id='category-lock-msg'
-      target_id='category-post-list'
-      scope=category_lock_scope
-      password=lock_cfg.password
-      title='此目录需要密码访问'
-      description='请输入四位数字密码后查看该目录下的文章列表。'
-      button_text='解锁目录'
-    %}
-
-    <ul class="content ps-0" id="category-post-list" style="display:none;">
-      {% for post in page.posts %}
-        <li class="d-flex justify-content-between px-md-3">
-          <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-          <span class="dash flex-grow-1"></span>
-          {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
-        </li>
-      {% endfor %}
-    </ul>
-
-  {% else %}
-    <ul class="content ps-0">
-      {% for post in page.posts %}
-        <li class="d-flex justify-content-between px-md-3">
-          <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-          <span class="dash flex-grow-1"></span>
-          {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
-        </li>
-      {% endfor %}
-    </ul>
-  {% endif %}
+  <ul class="content ps-0">
+    {% for post in page.posts %}
+      <li class="d-flex justify-content-between px-md-3">
+        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+        <span class="dash flex-grow-1"></span>
+        {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
+      </li>
+    {% endfor %}
+  </ul>
 </div>

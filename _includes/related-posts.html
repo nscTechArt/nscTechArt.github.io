@@ -14,12 +14,12 @@
 {% assign match_posts = '' | split: '' %}
 
 {% for category in page.categories %}
-  {% assign candidates = site.categories[category] | unlocked_posts %}
+  {% assign candidates = site.categories[category] %}
   {% assign match_posts = match_posts | push: candidates | uniq %}
 {% endfor %}
 
 {% for tag in page.tags %}
-  {% assign candidates = site.tags[tag] | unlocked_posts %}
+  {% assign candidates = site.tags[tag] %}
   {% assign match_posts = match_posts | push: candidates | uniq %}
 {% endfor %}
 

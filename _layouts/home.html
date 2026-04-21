@@ -4,7 +4,7 @@ layout: default
 
 {% include lang.html %}
 
-{% assign unlocked = site.posts | unlocked_posts %}
+{% assign unlocked = site.posts %}
 {% assign all_pinned = unlocked | where: 'pin', 'true' %}
 {% assign all_normal = unlocked | where_exp: 'item', 'item.pin != true and item.hidden != true' %}
 

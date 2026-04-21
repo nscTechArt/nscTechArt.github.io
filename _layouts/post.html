@@ -15,30 +15,6 @@ script_includes:
 
 <link rel="stylesheet" href="{{ '/assets/css/post-next.css' | relative_url }}">
 
-{% assign lock_cfg = site.post_folder_lock %}
-{% assign folder_locked = false %}
-{% assign lock_scope = '' %}
-{% if page.collection == 'posts' and lock_cfg and lock_cfg.enabled %}
-  {% assign page_path_down = page.path | replace: '\\', '/' | downcase %}
-  {% for folder_item in lock_cfg.folders %}
-    {% if folder_item.path %}
-      {% assign folder_path_down = folder_item.path | replace: '\\', '/' | downcase %}
-      {% if folder_path_down != '' and page_path_down contains folder_path_down %}
-        {% assign folder_locked = true %}
-        {% assign lock_scope = folder_item.category | default: folder_item.path | slugify %}
-        {% break %}
-      {% endif %}
-    {% else %}
-      {% assign folder_path_down = folder_item | replace: '\\', '/' | downcase %}
-      {% if folder_path_down != '' and page_path_down contains folder_path_down %}
-        {% assign folder_locked = true %}
-        {% assign lock_scope = folder_item | slugify %}
-        {% break %}
-      {% endif %}
-    {% endif %}
-  {% endfor %}
-{% endif %}
-
 <article class="px-1" data-toc="{{ enable_toc }}">
   <header>
     <h1 data-toc-skip>{{ page.title }}</h1>
@@ -146,32 +122,9 @@ script_includes:
     </dialog>
   {% endif %}
 
-  {% if folder_locked %}
-    {% include folder-lock-gate.html
-      card_id='folder-lock-card'
-      input_id='folder-lock-input'
-      button_id='folder-lock-btn'
-      msg_id='folder-lock-msg'
-      target_id='folder-lock-content'
-      scope=lock_scope
-      password=lock_cfg.password
-      title='此内容需要密码访问'
-      description='请先在对应目录页完成解锁，或直接输入四位数字密码。'
-      button_text='解锁'
-    %}
+  <div class="content">
+    {{ content }}
+  </div>
 
-    <div id="folder-lock-content" style="display:none;">
-      <div class="content">
-        {{ content }}
-      </div>
-
-      {% include post-tail.html %}
-    </div>
-  {% else %}
-    <div class="content">
-      {{ content }}
-    </div>
-
-    {% include post-tail.html %}
-  {% endif %}
+  {% include post-tail.html %}
 </article>

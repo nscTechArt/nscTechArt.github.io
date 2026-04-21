@@ -9,6 +9,18 @@ This is a personal blog built on the [jekyll-theme-chirpy](https://github.com/co
 ./tools/test.sh       # Production build (used for CI/deployment checks)
 ```
 
+## Environment Notes
+
+- This project uses Bundler-based Jekyll workflow. Prefer running the two scripts above instead of ad-hoc `jekyll` commands.
+- If build fails with `bundler: command not found: jekyll` or Ruby dependency conflicts, check local Ruby version first.
+- `html-proofer ~> 5.0` requires Ruby `>= 3.1`; macOS system Ruby 2.6 is not sufficient for full build/test.
+- Keep timezone-sensitive content aligned with site config (`Asia/Shanghai`) and post dates using `+0800`.
+
+Recommended command order for agents:
+1. `bundle install`
+2. `./tools/run.sh` for local preview
+3. `./tools/test.sh` before final delivery
+
 ## Post Conventions
 
 ### File Location & Naming
@@ -42,7 +54,6 @@ Key rules:
 - `media_subpath` enables bare filenames in image references: `![](image.png)` instead of full paths
 - `math: true` enables MathJax; omit or set `false` when not needed
 - Do **not** manually set `last_modified_at` — the `_plugins/posts-lastmod-hook.rb` reads it from git history automatically
-- Do **not** manually set `protected_by_folder_lock` or `folder_lock_scope` — set by `_plugins/post-visibility-filters.rb`
 
 ### Image Assets
 
@@ -53,17 +64,11 @@ Place images at `assets/img/<MainCategory>/<subcategory>/`. Set `media_subpath` 
 | Plugin | Purpose |
 |--------|---------|
 | `_plugins/posts-lastmod-hook.rb` | Reads `git log` to auto-populate `last_modified_at` for posts with >1 commits |
-| `_plugins/post-visibility-filters.rb` | Provides `unlocked_posts` Liquid filter to hide protected posts from lists |
-
-## Folder Lock System
-
-Configured in `_config.yml` under `post_folder_lock`. Protects entire category paths with a client-side PIN. The `_includes/folder-lock-gate.html` renders the unlock form. Posts in locked folders are automatically excluded from feeds and lists via the `unlocked_posts` filter.
 
 ## Custom Includes
 
 | Include | Usage |
 |---------|-------|
-| `folder-lock-gate.html` | Renders PIN unlock form; pass `card_id`, `input_id`, `button_id`, `msg_id`, `scope`, `password`, `title`, `description` |
 | `post-tail.html` | Footer appended to each post |
 | `related-posts.html` | Related post recommendations (scores by shared tags > shared categories) |
 | `update-list.html` | Inline changelog / update history block |
