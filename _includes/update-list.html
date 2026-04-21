@@ -2,7 +2,7 @@
 
 {% assign MAX_SIZE = 5 %}
 
-{% assign visible_posts = site.posts %}
+{% assign visible_posts = site.posts | where_exp: 'item', 'item.secret != true' %}
 {% assign all_list = '' | split: '' %}
 
 {% for post in visible_posts %}

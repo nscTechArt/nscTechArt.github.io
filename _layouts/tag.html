@@ -4,8 +4,9 @@ layout: page
 ---
 
 {% include lang.html %}
+{% include mentalspa-lock.html %}
 
-{% assign visible_posts = page.posts %}
+{% assign visible_posts = page.posts | where_exp: 'item', 'item.secret != true' %}
 
 <div id="page-tag">
   <h1 class="ps-lg-2">

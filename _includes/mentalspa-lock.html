@@ -1,0 +1,57 @@
+<style>
+  html:not(.mentalspa-unlocked) [data-mentalspa-unlocked] {
+    display: none !important;
+  }
+
+  html.mentalspa-unlocked [data-mentalspa-locked] {
+    display: none !important;
+  }
+</style>
+
+<script>
+  (() => {
+    const KEY = 'mentalspa-unlocked';
+    const root = document.documentElement;
+
+    const isUnlocked = () => window.localStorage.getItem(KEY) === 'true';
+    const syncState = () => root.classList.toggle('mentalspa-unlocked', isUnlocked());
+
+    const unlock = () => {
+      window.localStorage.setItem(KEY, 'true');
+      syncState();
+    };
+
+    const lock = () => {
+      window.localStorage.removeItem(KEY);
+      syncState();
+    };
+
+    syncState();
+
+    document.addEventListener('DOMContentLoaded', () => {
+      syncState();
+
+      document.querySelectorAll('[data-mentalspa-unlock-button]').forEach((button) => {
+        button.addEventListener('click', () => {
+          unlock();
+
+          const redirect = button.getAttribute('data-mentalspa-redirect');
+          if (redirect) {
+            window.location.href = redirect;
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-mentalspa-lock-button]').forEach((button) => {
+        button.addEventListener('click', () => {
+          lock();
+
+          const redirect = button.getAttribute('data-mentalspa-redirect');
+          if (redirect) {
+            window.location.href = redirect;
+          }
+        });
+      });
+    });
+  })();
+</script>

@@ -183,6 +183,14 @@ defaults:
       # to update the code of all other post links in this project.
       permalink: /posts/:title/
   - scope:
+      path: _posts/MentalSpa
+      type: posts
+    values:
+      secret: true
+      toc: false
+      sitemap: false
+      search_exclude: true
+  - scope:
       path: _drafts
     values:
       comments: false
@@ -224,4 +232,3 @@ jekyll-archives:
   permalinks:
     tag: /tags/:name/
     category: /categories/:name/
-

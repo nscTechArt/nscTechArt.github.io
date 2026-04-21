@@ -34,6 +34,10 @@
     {% continue %}
   {% endif %}
 
+  {% if page.secret != true and post.secret == true %}
+    {% continue %}
+  {% endif %}
+
   {% assign score = 0 %}
 
   {% for tag in post.tags %}
