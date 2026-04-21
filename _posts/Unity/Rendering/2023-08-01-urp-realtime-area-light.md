@@ -3,7 +3,7 @@ title: URP中实现实时面光源
 date: 2023-08-01 09:40 +0800
 categories: [Unity, Rendering]
 media_subpath: /assets/img/Unity/rendering
-tag: [Unity]
+tags: [Unity]
 math: true
 ---
 ### 1 Motivation

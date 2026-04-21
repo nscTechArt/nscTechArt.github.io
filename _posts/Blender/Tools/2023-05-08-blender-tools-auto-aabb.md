@@ -3,7 +3,7 @@ title: Blender中的一键AABB生成插件
 date: 2023-05-08 09:40 +0800
 categories: [Blender, Tools]
 media_subpath: /assets/img/Blender/Tools
-tag: [Blender]
+tags: [Blender]
 image: 111111.png
 ---
 

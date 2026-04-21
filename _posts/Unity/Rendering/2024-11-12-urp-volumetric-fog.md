@@ -3,7 +3,7 @@ title: Unity中实现Volumetric Fog
 date: 2024-11-12 09:40 +0800
 categories: [Unity, Rendering]
 media_subpath: /assets/img/Unity/24-11-12/
-tag: [Unity]
+tags: [Unity]
 math: true
 
 ---

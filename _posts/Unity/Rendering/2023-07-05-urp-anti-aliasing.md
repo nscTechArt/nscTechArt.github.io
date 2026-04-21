@@ -3,7 +3,7 @@ title: URP中的抗锯齿算法
 date: 2023-07-05 09:40 +0800
 categories: [Unity, Rendering]
 media_subpath: /assets/img/Unity/rendering
-tag: [Unity, Anti-Aliasing]
+tags: [Unity, Anti-Aliasing]
 math: true
 ---
 

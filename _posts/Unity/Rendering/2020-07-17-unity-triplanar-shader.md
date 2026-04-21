@@ -3,7 +3,7 @@ title: 在Unity中实现三面映射Shader
 date: 2020-07-17 09:40 +0800
 categories: [Unity, Rendering]
 media_subpath: /assets/img/Unity/rendering
-tag: [Unity]
+tags: [Unity]
 math: false
 ---
 

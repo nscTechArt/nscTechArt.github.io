@@ -3,7 +3,7 @@ title: Unity中的法线混合
 date: 2021-12-07 09:40 +0800
 categories: [Unity, Rendering]
 media_subpath: /assets/img/Unity/rendering
-tag: [Unity]
+tags: [Unity]
 math: false
 ---
 

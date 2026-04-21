@@ -3,7 +3,7 @@ title: Unity中实现Kawase Blur
 date: 2024-12-02 09:40 +0800
 categories: [Unity, Rendering]
 media_subpath: /assets/img/Unity/24-12-02/
-tag: [Unity, Blur]
+tags: [Unity, Blur]
 math: false
 ---
 
