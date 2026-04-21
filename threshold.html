@@ -7,48 +7,25 @@ search_exclude: true
 ---
 
 {% include lang.html %}
-{% include mentalspa-lock.html %}
-
-{% assign secret_posts = site.posts | where: 'secret', true | sort: 'date' | reverse %}
+{% assign hidden_posts = site.posts | where: 'secret', true | sort: 'date' | reverse %}
 
 <div class="content">
-  <div data-mentalspa-locked>
-    <p>这里不会出现在导航、分类页或首页里。</p>
-    <p>如果你想进入隐藏分区，点下面这个按钮即可。</p>
-    <p>
-      <button type="button" class="btn btn-primary" data-mentalspa-unlock-button>
-        解锁 MentalSpa
-      </button>
-    </p>
-  </div>
+  <p>这里汇总了所有默认不在首页、分类、标签和归档中出现的文章。</p>
+  <p>MentalSpa 会默认出现在这里，其他分类下你手动标记了 <code>secret: true</code> 的文章也会出现在这里。</p>
 
-  <div data-mentalspa-unlocked>
-    <p class="mb-3">MentalSpa 已解锁。下面这些文章和入口只会从这里集中出现。</p>
-    <p>
-      <button type="button" class="btn btn-outline-secondary btn-sm" data-mentalspa-lock-button>
-        重新锁定
-      </button>
-    </p>
-
-    {% assign groups = 'Connections,Insides,Trajectory' | split: ',' %}
-
-    {% for group in groups %}
-      {% assign posts = secret_posts | where_exp: 'item', 'item.categories[1] == group' %}
-
-      {% if posts.size > 0 %}
-        <section class="mt-5">
-          <h2>{{ group }}</h2>
-          <ul class="content ps-0">
-            {% for post in posts %}
-              <li class="d-flex justify-content-between px-md-3">
-                <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-                <span class="dash flex-grow-1"></span>
-                {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
-              </li>
-            {% endfor %}
-          </ul>
-        </section>
-      {% endif %}
-    {% endfor %}
-  </div>
+  {% if hidden_posts.size > 0 %}
+    <ul class="content ps-0 mt-4">
+      {% for post in hidden_posts %}
+        <li class="px-md-3 py-2">
+          <div class="d-flex justify-content-between gap-3 flex-wrap">
+            <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+            {% include datetime.html date=post.date class='text-muted small text-nowrap' lang=lang %}
+          </div>
+          <div class="text-muted small mt-1">{{ post.categories | join: ' / ' }}</div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted mt-4">当前没有隐藏文章。</p>
+  {% endif %}
 </div>

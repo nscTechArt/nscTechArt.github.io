@@ -11,11 +11,6 @@ script_includes:
 
 {% include lang.html %}
 {% include toc-status.html %}
-{% include mentalspa-lock.html %}
-
-{% if page.secret == true %}
-  {% assign enable_toc = false %}
-{% endif %}
 
 <link rel="stylesheet" href="{{ '/assets/css/post-next.css' | relative_url }}">
 
@@ -126,23 +121,9 @@ script_includes:
     </dialog>
   {% endif %}
 
-  {% if page.secret == true %}
-    <div class="content" data-mentalspa-locked>
-      <div class="alert alert-secondary mt-4 mb-0" role="alert">
-        这篇文章默认处于隐藏状态。
-        <a href="{{ '/threshold/' | relative_url }}">前往入口页解锁</a>
-        后即可查看正文。
-      </div>
-    </div>
-
-    <div class="content" data-mentalspa-unlocked>
-      {{ content }}
-    </div>
-  {% else %}
-    <div class="content">
-      {{ content }}
-    </div>
-  {% endif %}
+  <div class="content">
+    {{ content }}
+  </div>
 
   {% include post-tail.html %}
 </article>

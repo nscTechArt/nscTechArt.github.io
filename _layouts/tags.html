@@ -3,8 +3,6 @@ layout: page
 # All the Tags of posts.
 ---
 
-{% include mentalspa-lock.html %}
-
 {% assign visible_posts = site.posts | where_exp: 'item', 'item.secret != true' %}
 {% assign tags = '' | split: '' %}
 {% assign tag_sizes = '' | split: '' %}

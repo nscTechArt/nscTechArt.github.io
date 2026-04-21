@@ -3,7 +3,6 @@ layout: default
 ---
 
 {% include lang.html %}
-{% include mentalspa-lock.html %}
 
 {% assign unlocked = site.posts | where_exp: 'item', 'item.secret != true' %}
 {% assign all_pinned = unlocked | where: 'pin', 'true' %}
